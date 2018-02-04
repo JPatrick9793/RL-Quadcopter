@@ -25,4 +25,5 @@ class BaseAgent:
         =======
         - action: desired action vector as NumPy array, compatible with task's action space
         """
+        print ("test")
         raise NotImplementedError("{} must override step()".format(self.__class__.__name__))
