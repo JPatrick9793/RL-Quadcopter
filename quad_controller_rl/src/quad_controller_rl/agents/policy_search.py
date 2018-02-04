@@ -34,6 +34,7 @@ class RandomPolicySearch(BaseAgent):
         self.count = 0
 
     def step(self, state, reward, done):
+        print ("stepping")
         # Transform state vector
         state = (state - self.task.observation_space.low) / self.state_range  # scale to [0.0, 1.0]
         state = state.reshape(1, -1)  # convert to row vector
@@ -56,12 +57,14 @@ class RandomPolicySearch(BaseAgent):
         return action
 
     def act(self, state):
+        print ("acting")
         # Choose action based on given state and policy
         action = np.dot(state, self.w)  # simple linear policy
         #print(action)  # [debug: action vector]
         return action
 
     def learn(self):
+        print ("learning")
         # Learn by random policy search, using a reward-based score
         score = self.total_reward / float(self.count) if self.count else 0.0
         if score > self.best_score:
