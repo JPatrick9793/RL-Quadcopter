@@ -1,10 +1,9 @@
-"""Policy search agent."""
+"""ADJUSTED FOR TASK 1"""
 
 import numpy as np
 from quad_controller_rl.agents.base_agent import BaseAgent
 
-class RandomPolicySearch(BaseAgent):
-    """Sample agent that searches for optimal policy randomly."""
+class Task1_Policy(BaseAgent):
 
     def __init__(self, task):
         # Task (environment) information
