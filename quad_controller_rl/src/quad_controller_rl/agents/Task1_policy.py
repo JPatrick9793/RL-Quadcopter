@@ -25,7 +25,7 @@ class Task1_Policy(BaseAgent):
             scale=(self.action_range / (2 * self.state_size)).reshape(1, -1))  # start producing actions in a decent range
         
         # Nueral network as value function
-        self.deep_Q = build_NN(nuerons=128, actvation='relu', optimizer='adam')
+        self.deep_Q = self.build_NN(nuerons=128, activation='relu', optimizer='adam')
         self.experience_replay = []
         self.batch_size = 16
         self.gamma = 0.9
@@ -110,7 +110,7 @@ class Task1_Policy(BaseAgent):
         
         
     # method for building a simple nueral network
-    def build_NN(self, nuerons=64, actvation='relu', optimizer='adam'):
+    def build_NN(self, nuerons=64, activation='relu', optimizer='adam'):
         model = Sequential()
         model.add(Dense(units=nuerons,
                         activation = activation,
