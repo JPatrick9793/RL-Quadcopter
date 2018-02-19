@@ -1,3 +1,3 @@
 from quad_controller_rl.agents.base_agent import BaseAgent
 from quad_controller_rl.agents.policy_search import RandomPolicySearch
-from quad_controller_rl.agents.policy_gradients import Task1_policy.py
+from quad_controller_rl.agents.Task1_policy import Task1_Policy
