@@ -8,6 +8,7 @@ from keras.layers.core import Dense, Dropout, Activation
 from keras.optimizers import SGD
 from keras.utils import np_utils
 from keras.layers import Input, Dense
+import random
 
 class Task1_Policy(BaseAgent):
 
@@ -48,7 +49,7 @@ class Task1_Policy(BaseAgent):
         
     def step(self, state, reward, done):
         # Transform state vector
-        print ("reward:\t", reward)
+        # print ("reward:\t", reward)
         state = (state - self.task.observation_space.low) / self.state_range  # scale to [0.0, 1.0]
         state = state.reshape(1, -1)  # convert to row vector
         
@@ -86,7 +87,8 @@ class Task1_Policy(BaseAgent):
     def learn(self):
         
         print ("learning")
-        random_sample = random.sample(self.experience_replay, self.batch_size)
+        batch_size = len(self.experience_replay)//2
+        random_sample = random.sample(self.experience_replay, batch_size)
         
         for state, action, reward, next_state, done in random_sample:
             print ("\nNew Iteration...")
