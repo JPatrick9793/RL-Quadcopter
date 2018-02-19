@@ -2,6 +2,12 @@
 
 import numpy as np
 from quad_controller_rl.agents.base_agent import BaseAgent
+import keras
+from keras.models import Sequential
+from keras.layers.core import Dense, Dropout, Activation
+from keras.optimizers import SGD
+from keras.utils import np_utils
+from keras.layers import Input, Dense
 
 class Task1_Policy(BaseAgent):
 
@@ -17,7 +23,13 @@ class Task1_Policy(BaseAgent):
         self.w = np.random.normal(
             size=(self.state_size, self.action_size),  # weights for simple linear policy: state_space x action_space
             scale=(self.action_range / (2 * self.state_size)).reshape(1, -1))  # start producing actions in a decent range
-
+        
+        # Nueral network as value function
+        self.deep_Q = build_NN(nuerons=128, actvation='relu', optimizer='adam')
+        self.experience_replay = []
+        self.batch_size = 16
+        self.gamma = 0.9
+        
         # Score tracker and learning parameters
         self.best_w = None
         self.best_score = -np.inf
@@ -31,15 +43,19 @@ class Task1_Policy(BaseAgent):
         self.last_action = None
         self.total_reward = 0.0
         self.count = 0
-
+        # reset the experience replay buffer
+        self.experience_replay[:] = []
+        
     def step(self, state, reward, done):
         # Transform state vector
         print ("reward:\t", reward)
         state = (state - self.task.observation_space.low) / self.state_range  # scale to [0.0, 1.0]
         state = state.reshape(1, -1)  # convert to row vector
-
+        
         # Choose an action
         action = self.act(state)
+        
+        self.experience_replay.append((self.last_state, self.last_action, reward, state, done))
         
         # Save experience / reward
         if self.last_state is not None and self.last_action is not None:
@@ -57,23 +73,54 @@ class Task1_Policy(BaseAgent):
 
     def act(self, state):
         # Choose action based on given state and policy
-        action = np.dot(state, self.w)  # simple linear policy
-        #print(action)  # [debug: action vector]
-        return action
+        # action = np.dot(state, self.w)  # simple linear policy
+        
+        print ("Input state:\t{0}".format(state))
+        
+        action = self.deep_Q.predict(state)
+        
+        print ("Output action:\t{0}".format(action))
+        
+        return action[0]
 
     def learn(self):
+        
         print ("learning")
-        # Learn by random policy search, using a reward-based score
-        score = self.total_reward / float(self.count) if self.count else 0.0
-        if score > self.best_score:
-            self.best_score = score
-            self.best_w = self.w
-            self.noise_scale = max(0.5 * self.noise_scale, 0.01)
-        else:
-            self.w = self.best_w
-            self.noise_scale = min(2.0 * self.noise_scale, 3.2)
-
-        self.w = self.w + self.noise_scale * np.random.normal(size=self.w.shape)  # equal noise in all directions
-        print("RandomPolicySearch.learn(): t = {:4d}, score = {:7.3f} (best = {:7.3f}), noise_scale = {}".format(
-                self.count, score, self.best_score, self.noise_scale))  # [debug]
-        #print(self.w)  # [debug: policy parameters]
+        random_sample = random.sample(self.experience_replay, self.batch_size)
+        
+        for state, action, reward, next_state, done in random_sample:
+            print ("\nNew Iteration...")
+            print ("state:\t", state)
+            print ("action:\t", action)
+            print ("reward:\t", reward)
+            print ("next_state:\t", next_state)
+            print ("done?\t", done)
+            
+            target = reward
+            
+            if not done:
+                target = reward + self.gamma * np.amax(self.deep_Q.predict(next_state)[0])
+                
+            target_f = self.deep_Q.predict(state)
+            target_f[0][action] = target
+            
+            self.deep_Q.fit(state, target_f, epochs=1, verbose=0)
+            
+        print ("Done training!")
+        
+        
+    # method for building a simple nueral network
+    def build_NN(self, nuerons=64, actvation='relu', optimizer='adam'):
+        model = Sequential()
+        model.add(Dense(units=nuerons,
+                        activation = activation,
+                        input_dim=self.state_size))
+        model.add(Dropout(.2))
+        model.add(Dense(units=nuerons//2,
+                        activation = activation))
+        model.add(Dropout(.2))
+        model.add(Dense(units=self.action_size,
+                        activation = 'linear'))
+        model.compile(loss = 'mse', optimizer=optimizer) # , metrics=['accuracy'])
+        model.summary()
+        return model
