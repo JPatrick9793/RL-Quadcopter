@@ -106,8 +106,14 @@ class ReplayBuffer:
       
 class Task1_Policy(BaseAgent):
     def __init__(self, task):
-        self.action_low = self.task.action_space.low
-        self.action_high = self.task.action_space.high
+        self.task = task
+        self.state_size = np.prod(self.task.observation_space.shape)
+        self.state_range = self.task.observation_space.high - self.task.observation_space.low
+        
+        self.action_size = np.prod(self.task.action_space.shape)
+        self.action_low = task.action_space.low
+        self.action_high = task.action_space.high
+        self.action_range = self.action_high - self.action_low
         
         # Actor object
         self.actor_local = Actor(self.state_size, self.action_size, self.action_low, self.action_high)
