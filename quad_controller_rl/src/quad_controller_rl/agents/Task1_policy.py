@@ -15,12 +15,49 @@ Experience_Replay = namedtuple("Experience_replay",
                                field_names=['state', 'action', 'reward',
                                             'next_state', 'done'])
 
+
+class Actor:
+  def __init__(self, state_size, action_size, action_low, action_high):
+      self.state_size = state_size
+      self.action_size = action_size
+      self.action_low = action_low
+      self.action_high = action_high
+      self.action_range = self.action_high = self.action_low
+      
+      # build the NN model
+      self.build_NN()
+      
+  def build_NN(self):
+      states = layers.Input(shape=(self.state_size,), name='states')
+      # add dense layers
+      x = layers.Dense(units=16, activation='relu')(states)
+      x = layers.Dense(units=32, activation='relu')(x)
+      x = layers.Dense(units=64, activation='relu')(x)
+      # squish outputs between 0 and 1
+      raw_actions = layers.Dense(units=self.action_size,
+                                 activation='sigmoid',
+                                 name='raw_actions')(x)
+      # re scale the values to appropriate range
+      actions = layers.Lambda(lambda x: (x * self.action_range) + self.action_low,
+                              name='actions')(raw_actions)
+      # create the model
+      self.model = models.Model(inputs=states, outputs=actions)
+      # define loss function
+      action_gradients = layers.Input(shape=(self.action_size,))
+      loss = K.mean(-action_gradients*actions)
+      # define optimizer
+      optimizer = optimizers.Adam()
+      # define training function
+      updates_op = optimizer.get_updates(params=self.model.trainable_weights, loss=loss)
+      self.train_fn = K.function(inputs=[self.model.input, action_gradients, K.learning_phase()],
+                                 outputs=[], updates=updates_op)
+
+
 class ReplayBuffer:
     def __init__(self, size=100):
         self.size = size
         self.memory = []
         self.idx = 0
-        
     def add(self, state, action, reward, next_state, done):
         set = Experience_replay(state, action, reward, next_state, done)
         if len(self.memory) < self.size:
@@ -28,13 +65,10 @@ class ReplayBuffer:
         else:
             self.memory[self.idx] = set
             self.idx = (self.idx + 1) % self.size
-            
     def sample(self, batch_size=16):
         return random.sample(self.memory, batch_size)
-    
     def reset(self):
         self.memory[:] = []
-    
     def __len__(self):
         return len(self.memory)
 
