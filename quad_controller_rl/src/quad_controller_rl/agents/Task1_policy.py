@@ -9,6 +9,34 @@ from keras.optimizers import SGD
 from keras.utils import np_utils
 from keras.layers import Input, Dense
 import random
+from collections import namedtuple
+
+Experience_Replay = namedtuple("Experience_replay",
+                               field_names=['state', 'action', 'reward',
+                                            'next_state', 'done'])
+
+class ReplayBuffer:
+    def __init__(self, size=100):
+        self.size = size
+        self.memory = []
+        self.idx = 0
+        
+    def add(self, state, action, reward, next_state, done):
+        set = Experience_replay(state, action, reward, next_state, done)
+        if len(self.memory) < self.size:
+            self.memory.append(set)
+        else:
+            self.memory[self.idx] = set
+            self.idx = (self.idx + 1) % self.size
+            
+    def sample(self, batch_size=16):
+        return random.sample(self.memory, batch_size)
+    
+    def reset(self):
+        self.memory[:] = []
+    
+    def __len__(self):
+        return len(self.memory)
 
 class Task1_Policy(BaseAgent):
 
