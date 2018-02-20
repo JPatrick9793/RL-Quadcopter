@@ -85,12 +85,12 @@ class Critic:
 
 
 class ReplayBuffer:
-    def __init__(self, size=100):
+    def __init__(self, size=10):
         self.size = size
         self.memory = []
         self.idx = 0
     def add(self, state, action, reward, next_state, done):
-        set = Experience_replay(state, action, reward, next_state, done)
+        set = Experience_Replay(state, action, reward, next_state, done)
         if len(self.memory) < self.size:
             self.memory.append(set)
         else:
@@ -130,14 +130,17 @@ class Task1_Policy(BaseAgent):
         
         self.noise = OUNoise(self.action_size)
         
-        self.buffer_size = 100
-        self.batch_size = 16
+        self.buffer_size = 10
+        self.batch_size = 4
         self.memory = ReplayBuffer(self.buffer_size)
         
         self.gamma = 0.99
         self.tau = 0.001
-        
+        self.last_state = None
+        self.last_action = None
+
     def step(self, state, reward, done):
+        # print ("STEPPING")
         # Choose an action
         action = self.act(state)
         
@@ -148,7 +151,10 @@ class Task1_Policy(BaseAgent):
         if len(self.memory) > self.batch_size:
             experiences = self.memory.sample(self.batch_size)
             self.learn(experiences)
-            
+
+        self.last_state = state
+        self.last_action = action
+
         '''
         # Learn, if at end of episode
         if done:
@@ -156,13 +162,13 @@ class Task1_Policy(BaseAgent):
             self.reset_episode_vars()
         '''
 
-    def act(self, state):
+    def act(self, states):
         states = np.reshape(states, [-1, self.state_size])
         actions = self.actor_local.model.predict(states)
         
         return actions + self.noise.sample()
 
-    def learn(self):
+    def learn(self, experiences):
         # Convert experience tuples to separate arrays for each element (states, actions, rewards, etc.)
         states = np.vstack([e.state for e in experiences if e is not None])
         actions = np.array([e.action for e in experiences if e is not None]).astype(np.float32).reshape(-1, self.action_size)
