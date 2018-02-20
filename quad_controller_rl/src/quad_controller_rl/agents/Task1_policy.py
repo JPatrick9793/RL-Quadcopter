@@ -3,11 +3,8 @@
 import numpy as np
 from quad_controller_rl.agents.base_agent import BaseAgent
 import keras
-from keras.models import Sequential
-from keras.layers.core import Dense, Dropout, Activation
-from keras.optimizers import SGD
-from keras.utils import np_utils
-from keras.layers import Input, Dense
+from keras import layers, models, optimizers
+from keras import backend as K
 import random
 from collections import namedtuple
 
@@ -106,119 +103,87 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.memory)
 
+      
 class Task1_Policy(BaseAgent):
-
     def __init__(self, task):
-        # Task (environment) information
-        self.task = task  # should contain observation_space and action_space
-        self.state_size = np.prod(self.task.observation_space.shape)
-        self.state_range = self.task.observation_space.high - self.task.observation_space.low
-        self.action_size = np.prod(self.task.action_space.shape)
-        self.action_range = self.task.action_space.high - self.task.action_space.low
-
-        # Policy parameters
-        self.w = np.random.normal(
-            size=(self.state_size, self.action_size),  # weights for simple linear policy: state_space x action_space
-            scale=(self.action_range / (2 * self.state_size)).reshape(1, -1))  # start producing actions in a decent range
+        self.action_low = self.task.action_space.low
+        self.action_high = self.task.action_space.high
         
-        # Nueral network as value function
-        self.deep_Q = self.build_NN(nuerons=128, activation='relu', optimizer='adam')
-        self.experience_replay = []
+        # Actor object
+        self.actor_local = Actor(self.state_size, self.action_size, self.action_low, self.action_high)
+        # duplicate Actor object for fixed Q
+        self.actor_target = Actor(self.state_size, self.action_size, self.action_low, self.action_high)
+        
+        # Critic object
+        self.critic_local = Critic(self.state_size, self.action_size)
+        # duplicate Critic object for fixed Q
+        self.critic_target = Critic(self.state_size, self.action_size)
+        
+        self.critic_target.model.set_weights(self.critic_local.model.get_weights())
+        self.actor_target.model.set_weights(self.actor_local.model.get_weights())
+        
+        self.noise = OUNoise(self.action_size)
+        
+        self.buffer_size = 100
         self.batch_size = 16
-        self.gamma = 0.9
+        self.memory = ReplayBuffer(self.buffer_size)
         
-        # Score tracker and learning parameters
-        self.best_w = None
-        self.best_score = -np.inf
-        self.noise_scale = 0.1
-
-        # Episode variables
-        self.reset_episode_vars()
-
-    def reset_episode_vars(self):
-        self.last_state = None
-        self.last_action = None
-        self.total_reward = 0.0
-        self.count = 0
-        # reset the experience replay buffer
-        self.experience_replay[:] = []
+        self.gamma = 0.99
+        self.tau = 0.001
         
     def step(self, state, reward, done):
-        # Transform state vector
-        # print ("reward:\t", reward)
-        state = (state - self.task.observation_space.low) / self.state_range  # scale to [0.0, 1.0]
-        state = state.reshape(1, -1)  # convert to row vector
-        
         # Choose an action
         action = self.act(state)
         
-        self.experience_replay.append((self.last_state, self.last_action, reward, state, done))
-        
         # Save experience / reward
         if self.last_state is not None and self.last_action is not None:
-            self.total_reward += reward
-            self.count += 1
-
+            self.memory.add(self.last_state, self.last_action, reward, state, done)
+            
+        if len(self.memory) > self.batch_size:
+            experiences = self.memory.sample(self.batch_size)
+            self.learn(experiences)
+            
+        '''
         # Learn, if at end of episode
         if done:
             self.learn()
             self.reset_episode_vars()
-
-        self.last_state = state
-        self.last_action = action
-        return action
+        '''
 
     def act(self, state):
-        # Choose action based on given state and policy
-        # action = np.dot(state, self.w)  # simple linear policy
+        states = np.reshape(states, [-1, self.state_size])
+        actions = self.actor_local.model.predict(states)
         
-        print ("Input state:\t{0}".format(state))
-        
-        action = self.deep_Q.predict(state)
-        
-        print ("Output action:\t{0}".format(action))
-        
-        return action[0]
+        return actions + self.noise.sample()
 
     def learn(self):
-        
-        print ("learning")
-        batch_size = len(self.experience_replay)//2
-        random_sample = random.sample(self.experience_replay, batch_size)
-        
-        for state, action, reward, next_state, done in random_sample:
-            print ("\nNew Iteration...")
-            print ("state:\t", state)
-            print ("action:\t", action)
-            print ("reward:\t", reward)
-            print ("next_state:\t", next_state)
-            print ("done?\t", done)
-            
-            target = reward
-            
-            if not done:
-                target = reward + self.gamma * np.amax(self.deep_Q.predict(next_state)[0])
-                
-            target_f = self.deep_Q.predict(state)
-            target_f[0][action] = target
-            
-            self.deep_Q.fit(state, target_f, epochs=1, verbose=0)
-            
-        print ("Done training!")
-        
-        
-    # method for building a simple nueral network
-    def build_NN(self, nuerons=64, activation='relu', optimizer='adam'):
-        model = Sequential()
-        model.add(Dense(units=nuerons,
-                        activation = activation,
-                        input_dim=self.state_size))
-        model.add(Dropout(.2))
-        model.add(Dense(units=nuerons//2,
-                        activation = activation))
-        model.add(Dropout(.2))
-        model.add(Dense(units=self.action_size,
-                        activation = 'linear'))
-        model.compile(loss = 'mse', optimizer=optimizer) # , metrics=['accuracy'])
-        model.summary()
-        return model
+        # Convert experience tuples to separate arrays for each element (states, actions, rewards, etc.)
+        states = np.vstack([e.state for e in experiences if e is not None])
+        actions = np.array([e.action for e in experiences if e is not None]).astype(np.float32).reshape(-1, self.action_size)
+        rewards = np.array([e.reward for e in experiences if e is not None]).astype(np.float32).reshape(-1, 1)
+        dones = np.array([e.done for e in experiences if e is not None]).astype(np.uint8).reshape(-1, 1)
+        next_states = np.vstack([e.next_state for e in experiences if e is not None])
+
+        # Get predicted next-state actions and Q values from target models
+        actions_next = self.actor_target.model.predict_on_batch(next_states)
+        Q_targets_next = self.critic_target.model.predict_on_batch([next_states, actions_next])
+
+        # Compute Q targets for current states and train critic model (local)
+        Q_targets = rewards + self.gamma * Q_targets_next * (1 - dones)
+        self.critic_local.model.train_on_batch(x=[states, actions], y=Q_targets)
+
+        # Train actor model (local)
+        action_gradients = np.reshape(self.critic_local.get_action_gradients([states, actions, 0]), (-1, self.action_size))
+        self.actor_local.train_fn([states, action_gradients, 1])  # custom training function
+
+        # Soft-update target models
+        self.soft_update(self.critic_local.model, self.critic_target.model)
+        self.soft_update(self.actor_local.model, self.actor_target.model)
+
+    def soft_update(self, local_model, target_model):
+        """Soft update model parameters."""
+        local_weights = np.array(local_model.get_weights())
+        target_weights = np.array(target_model.get_weights())
+
+        new_weights = self.tau * local_weights + (1 - self.tau) * target_weights
+        target_model.set_weights(new_weights)
