@@ -23,10 +23,8 @@ class Actor:
       self.action_low = action_low
       self.action_high = action_high
       self.action_range = self.action_high = self.action_low
-      
       # build the NN model
       self.build_NN()
-      
   def build_NN(self):
       states = layers.Input(shape=(self.state_size,), name='states')
       # add dense layers
@@ -51,6 +49,42 @@ class Actor:
       updates_op = optimizer.get_updates(params=self.model.trainable_weights, loss=loss)
       self.train_fn = K.function(inputs=[self.model.input, action_gradients, K.learning_phase()],
                                  outputs=[], updates=updates_op)
+      
+      
+Class Critic:
+    def __init__(self, state_size, action_size):
+        self.state_size = state_size
+        self.action_size = action_size
+        # build the NN model
+        self.build_NN()
+        
+    def build_NN(self):
+        # initialize state and action inputs
+        states = layers.Input(shape=(self.state_size,), name='states')
+        actions = layers.Input(shape=(self.action_size,), name='actions')
+        # layers for state network
+        net_states = layers.Dense(units=32, activation='relu')(states)
+        net_states = layers.Dense(units=64, activation='relu')(net_states)
+        # layers for actions network
+        net_actions = layers.Dense(units=32, activation='relu')(actions)
+        net_actions = layers.Dense(units=64, activation='relu')(net_actions)
+        # combine state and actions
+        net = layers.Add()([net_states, net_actions])
+        net = layers.Activation('relu')(net)
+        # generate a Q_value
+        Q_values = layers.Dense(units=1, name='q_values')(net)
+        # create the model
+        self.model = models.Model(inputs=[states, actions], outputs=Q_values)
+        # set the optimizer
+        optimizer = optimizers.Adam()
+        self.model.compile(optimizer=optimizer, loss='mse')
+        # calculate the gradients with respect to actions
+        action_gradients = K.gradients(Q_values, actions)
+        # function to get the action gradients
+        # to be used by Actor
+        self.get_action_gradients = K.function(
+            inputs=[*self.model.input, K.learning_phase()],
+            outputs=action_gradients)
 
 
 class ReplayBuffer:
