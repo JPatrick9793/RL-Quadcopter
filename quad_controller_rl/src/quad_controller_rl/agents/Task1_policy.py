@@ -161,14 +161,18 @@ class Task1_Policy(BaseAgent):
             self.learn()
             self.reset_episode_vars()
         '''
+        return action
 
     def act(self, states):
+        print ("\nACTING")
         states = np.reshape(states, [-1, self.state_size])
         actions = self.actor_local.model.predict(states)
-        
+        print ("actions:")
+        print (actions)
         return actions + self.noise.sample()
 
     def learn(self, experiences):
+        # print ("LEARNING!!!!!!!")
         # Convert experience tuples to separate arrays for each element (states, actions, rewards, etc.)
         states = np.vstack([e.state for e in experiences if e is not None])
         actions = np.array([e.action for e in experiences if e is not None]).astype(np.float32).reshape(-1, self.action_size)
