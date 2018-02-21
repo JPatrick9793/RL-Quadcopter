@@ -168,14 +168,16 @@ class Task1_Policy(BaseAgent):
 
         self.last_state = state
         self.last_action = action
+        if done:
+            print ("reward:\t{0}".format(reward))
         return self.postprocess_action(action)
 
     def act(self, states):
-        print ("\nACTING")
+        # print ("\nACTING")
         states = np.reshape(states, [-1, self.state_size])
         actions = self.actor_local.model.predict(states)
-        print ("actions:")
-        print (actions)
+        # print ("actions:")
+        # print (actions)
         return actions + self.noise.sample()
 
     def learn(self, experiences):

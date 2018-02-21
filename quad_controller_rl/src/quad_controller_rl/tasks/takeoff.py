@@ -57,11 +57,11 @@ class Takeoff(BaseTask):
         # Take one RL step, passing in current state and reward, and obtain action
         # Note: The reward passed in here is the result of past action(s)
         action = self.agent.step(state, reward, done)  # note: action = <force; torque> vector
-        print ("returned action:")
-        print (action)
+        # print ("returned action:")
+        # print (action)
         # Convert to proper force command (a Wrench object) and return it
         if action is not None:
-            print ("Action is not None!")
+            # print ("Action is not None!")
             action = np.clip(action.flatten(), self.action_space.low, self.action_space.high)  # flatten, clamp to action space limits
             return Wrench(
                     force=Vector3(action[0], action[1], action[2]),
