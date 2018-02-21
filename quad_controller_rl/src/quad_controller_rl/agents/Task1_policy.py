@@ -54,7 +54,6 @@ class Critic:
         self.action_size = action_size
         # build the NN model
         self.build_NN()
-        
     def build_NN(self):
         # initialize state and action inputs
         states = layers.Input(shape=(self.state_size,), name='states')
@@ -82,8 +81,6 @@ class Critic:
         self.get_action_gradients = K.function(
             inputs=[*self.model.input, K.learning_phase()],
             outputs=action_gradients)
-
-
 class ReplayBuffer:
     def __init__(self, size=10):
         self.size = size
@@ -107,13 +104,20 @@ class ReplayBuffer:
 class Task1_Policy(BaseAgent):
     def __init__(self, task):
         self.task = task
-        self.state_size = np.prod(self.task.observation_space.shape)
+        # self.state_size = np.prod(self.task.observation_space.shape)
+        self.state_size = 3
         self.state_range = self.task.observation_space.high - self.task.observation_space.low
         
-        self.action_size = np.prod(self.task.action_space.shape)
-        self.action_low = task.action_space.low
-        self.action_high = task.action_space.high
+        # self.action_size = np.prod(self.task.action_space.shape)
+        self.action_size = 3
+        # self.action_low = task.action_space.low
+        self.action_low = task.action_space.low[0:3]
+        # self.action_high = task.action_space.high
+        self.action_high = task.action_space.high[0:3]
         self.action_range = self.action_high - self.action_low
+        print("Original spaces: {}, {}\nConstrained spaces: {}, {}".format(
+            self.task.observation_space.shape, self.task.action_space.shape,
+            self.state_size, self.action_size))
         
         # Actor object
         self.actor_local = Actor(self.state_size, self.action_size, self.action_low, self.action_high)
@@ -129,7 +133,6 @@ class Task1_Policy(BaseAgent):
         self.actor_target.model.set_weights(self.actor_local.model.get_weights())
         
         self.noise = OUNoise(self.action_size)
-        
         self.buffer_size = 10
         self.batch_size = 4
         self.memory = ReplayBuffer(self.buffer_size)
@@ -138,10 +141,21 @@ class Task1_Policy(BaseAgent):
         self.tau = 0.001
         self.last_state = None
         self.last_action = None
+        
+    def preprocess_state(self, state):
+        """Reduce state vector to relevant dimensions."""
+        return state[0:3]  # position only
+      
+    def postprocess_action(self, action):
+        """Return complete action vector."""
+        complete_action = np.zeros(self.task.action_space.shape)  # shape: (6,)
+        complete_action[0:3] = action  # linear force only
+        return complete_action
 
     def step(self, state, reward, done):
         # print ("STEPPING")
         # Choose an action
+        state = self.preprocess_state(state)
         action = self.act(state)
         
         # Save experience / reward
@@ -154,14 +168,7 @@ class Task1_Policy(BaseAgent):
 
         self.last_state = state
         self.last_action = action
-
-        '''
-        # Learn, if at end of episode
-        if done:
-            self.learn()
-            self.reset_episode_vars()
-        '''
-        return action
+        return self.postprocess_action(action)
 
     def act(self, states):
         print ("\nACTING")
