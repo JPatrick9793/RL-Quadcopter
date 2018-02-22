@@ -15,11 +15,17 @@ Experience_Replay = namedtuple("Experience_replay",
 
 class Actor:
   def __init__(self, state_size, action_size, action_low, action_high):
+      print ("\n:::IN ACTOR:::")
       self.state_size = state_size
+      print ("self.state_size:\n{0}".format(self.state_size))
       self.action_size = action_size
+      print ("self.action_size:\n{0}".format(self.action_size))
       self.action_low = action_low
+      print ("self.action_low:\n{0}".format(self.action_low))
       self.action_high = action_high
-      self.action_range = self.action_high = self.action_low
+      print ("self.action_high:\n{0}".format(self.action_high))
+      self.action_range = self.action_high - self.action_low
+      print ("self.action_range:\n{0}".format(self.action_range))
       # build the NN model
       self.build_NN()
   def build_NN(self):
@@ -27,8 +33,15 @@ class Actor:
       
       # add dense layers
       net = layers.Dense(units=32, activation='relu')(states)
-      net = layers.Dense(units=64, activation='relu')(net)
+      # net = layers.BatchNormalization()(net)
+      # net = layers.Activation('relu')(net)
       net = layers.Dense(units=32, activation='relu')(net)
+      # net = layers.BatchNormalization()(net)
+      # net = layers.Activation('relu')(net)
+      net = layers.Dense(units=32, activation='relu')(net)      
+      # net = layers.BatchNormalization()(net)
+      # net = layers.Activation('relu')(net)
+
       
       # squish outputs between 0 and 1
       raw_actions = layers.Dense(units=self.action_size,
@@ -50,8 +63,8 @@ class Actor:
       updates_op = optimizer.get_updates(params=self.model.trainable_weights, loss=loss)
       self.train_fn = K.function(inputs=[self.model.input, action_gradients, K.learning_phase()],
                                  outputs=[], updates=updates_op)
-      
-      
+
+
 class Critic:
     def __init__(self, state_size, action_size):
         self.state_size = state_size
@@ -112,8 +125,13 @@ class Task1_Policy(BaseAgent):
         self.task = task
         # self.state_size = np.prod(self.task.observation_space.shape)
         self.state_size = 3
-        self.state_range = self.task.observation_space.high - self.task.observation_space.low
-        
+        self.state_low = self.task.observation_space.low[0:3]
+        self.state_high = self.task.observation_space.high[0:3] 
+        self.state_range = self.state_high - self.state_low
+        print ("Original state_low:\t{0}".format(self.task.observation_space.low))
+        print ("New state_low:\t{0}".format(self.state_low))
+        print ("Original state_high:\t{0}".format(self.task.observation_space.high))
+        print ("New state_high:\t{0}".format(self.state_high))
         # self.action_size = np.prod(self.task.action_space.shape)
         self.action_size = 3
         # self.action_low = task.action_space.low
@@ -147,6 +165,11 @@ class Task1_Policy(BaseAgent):
         self.tau = 0.001
         self.last_state = None
         self.last_action = None
+
+        self.step_count = 0
+
+    def get_step_count(self):
+        return self.step_count
         
     def preprocess_state(self, state):
         """Reduce state vector to relevant dimensions."""
@@ -159,24 +182,36 @@ class Task1_Policy(BaseAgent):
         return complete_action
 
     def step(self, state, reward, done):
+        self.step_count += 1
         # print ("STEPPING")
         # Choose an action
-        state = self.preprocess_state(state)
+        state_unp = self.preprocess_state(state)
+        # scale to [0.0, 1.0]
+        state = (state_unp - self.state_low)/self.state_range
+        # convert to row vector
+        state = state.reshape(1, -1)
+        # pass into act() method to produce actions
         action = self.act(state)
-        
+        if self.step_count % 100 == 0:
+            self.step_count = 0
+            print ("\n\n...In Stepping...")
+            print ("unprocessed state:\n{0}".format(state_unp))
+            print ("preprocessed state:\n{0}".format(state))
+            print ("resulting action:\n{0}".format(action))
+
         # Save experience / reward
         if self.last_state is not None and self.last_action is not None:
             self.memory.add(self.last_state, self.last_action, reward, state, done)
             
-        if len(self.memory) > self.batch_size and self.step_count % 100 == 0:
-            self.step_count = 0
+        if len(self.memory) > self.batch_size: # and self.step_count % 100 == 0:
+            # self.step_count = 0
             experiences = self.memory.sample(self.batch_size)
             self.learn(experiences)
 
         self.last_state = state
         self.last_action = action
         
-        self.step_count += 1
+        # self.step_count += 1
         
         if done:
             print ("reward:\t{0}".format(reward))
@@ -189,7 +224,13 @@ class Task1_Policy(BaseAgent):
         actions = self.actor_local.model.predict(states)
         # print ("actions:")
         # print (actions)
-        return actions + self.noise.sample()
+        noise = self.noise.sample()
+        if self.step_count % 100 == 0:
+            print ("\n...In Acting...")
+            print ("reshaped input states:\n{0}".format(states))
+            print ("resulting actions:\n{0}".format(actions))
+            print ("Noise:\n{0}".format(noise))
+        return actions + noise
 
     def learn(self, experiences):
         # print ("LEARNING!!!!!!!")
