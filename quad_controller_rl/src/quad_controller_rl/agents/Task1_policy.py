@@ -24,19 +24,23 @@ class Actor:
       self.build_NN()
   def build_NN(self):
       states = layers.Input(shape=(self.state_size,), name='states')
+      
       # add dense layers
-      x = layers.Dense(units=16, activation='relu')(states)
-      x = layers.Dense(units=32, activation='relu')(x)
-      x = layers.Dense(units=64, activation='relu')(x)
+      net = layers.Dense(units=32, activation='relu')(states)
+      net = layers.Dense(units=64, activation='relu')(net)
+      net = layers.Dense(units=32, activation='relu')(net)
+      
       # squish outputs between 0 and 1
       raw_actions = layers.Dense(units=self.action_size,
                                  activation='sigmoid',
-                                 name='raw_actions')(x)
+                                 name='raw_actions')(net)
+      
       # re scale the values to appropriate range
       actions = layers.Lambda(lambda x: (x * self.action_range) + self.action_low,
                               name='actions')(raw_actions)
       # create the model
       self.model = models.Model(inputs=states, outputs=actions)
+      
       # define loss function
       action_gradients = layers.Input(shape=(self.action_size,))
       loss = K.mean(-action_gradients*actions)
@@ -54,6 +58,7 @@ class Critic:
         self.action_size = action_size
         # build the NN model
         self.build_NN()
+        
     def build_NN(self):
         # initialize state and action inputs
         states = layers.Input(shape=(self.state_size,), name='states')
@@ -81,6 +86,7 @@ class Critic:
         self.get_action_gradients = K.function(
             inputs=[*self.model.input, K.learning_phase()],
             outputs=action_gradients)
+        
 class ReplayBuffer:
     def __init__(self, size=10):
         self.size = size
@@ -133,8 +139,8 @@ class Task1_Policy(BaseAgent):
         self.actor_target.model.set_weights(self.actor_local.model.get_weights())
         
         self.noise = OUNoise(self.action_size)
-        self.buffer_size = 10
-        self.batch_size = 4
+        self.buffer_size = 100
+        self.batch_size = 16
         self.memory = ReplayBuffer(self.buffer_size)
         
         self.gamma = 0.99
@@ -162,14 +168,19 @@ class Task1_Policy(BaseAgent):
         if self.last_state is not None and self.last_action is not None:
             self.memory.add(self.last_state, self.last_action, reward, state, done)
             
-        if len(self.memory) > self.batch_size:
+        if len(self.memory) > self.batch_size and self.step_count % 100 == 0:
+            self.step_count = 0
             experiences = self.memory.sample(self.batch_size)
             self.learn(experiences)
 
         self.last_state = state
         self.last_action = action
+        
+        self.step_count += 1
+        
         if done:
             print ("reward:\t{0}".format(reward))
+            
         return self.postprocess_action(action)
 
     def act(self, states):
