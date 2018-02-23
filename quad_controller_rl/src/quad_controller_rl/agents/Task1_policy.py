@@ -1,6 +1,8 @@
 """ADJUSTED FOR TASK 1"""
 
 import numpy as np
+import os
+import pandas as pd
 from quad_controller_rl.agents.base_agent import BaseAgent
 import keras
 from keras import layers, models, optimizers
@@ -14,55 +16,56 @@ Experience_Replay = namedtuple("Experience_replay",
 
 
 class Actor:
-  def __init__(self, state_size, action_size, action_low, action_high):
-      print ("\n:::IN ACTOR:::")
-      self.state_size = state_size
-      print ("self.state_size:\n{0}".format(self.state_size))
-      self.action_size = action_size
-      print ("self.action_size:\n{0}".format(self.action_size))
-      self.action_low = action_low
-      print ("self.action_low:\n{0}".format(self.action_low))
-      self.action_high = action_high
-      print ("self.action_high:\n{0}".format(self.action_high))
-      self.action_range = self.action_high - self.action_low
-      print ("self.action_range:\n{0}".format(self.action_range))
-      # build the NN model
-      self.build_NN()
-  def build_NN(self):
-      states = layers.Input(shape=(self.state_size,), name='states')
+    def __init__(self, state_size, action_size, action_low, action_high):
+        print ("\n:::IN ACTOR:::")
+        self.state_size = state_size
+        print ("self.state_size:\n{0}".format(self.state_size))
+        self.action_size = action_size
+        print ("self.action_size:\n{0}".format(self.action_size))
+        self.action_low = action_low
+        print ("self.action_low:\n{0}".format(self.action_low))
+        self.action_high = action_high
+        print ("self.action_high:\n{0}".format(self.action_high))
+        self.action_range = self.action_high - self.action_low
+        print ("self.action_range:\n{0}".format(self.action_range))
+        # build the NN model
+        self.build_NN()
+
+    def build_NN(self):
+        states = layers.Input(shape=(self.state_size,), name='states')
       
-      # add dense layers
-      net = layers.Dense(units=32, activation='relu')(states)
-      # net = layers.BatchNormalization()(net)
-      # net = layers.Activation('relu')(net)
-      net = layers.Dense(units=32, activation='relu')(net)
-      # net = layers.BatchNormalization()(net)
-      # net = layers.Activation('relu')(net)
-      net = layers.Dense(units=32, activation='relu')(net)      
-      # net = layers.BatchNormalization()(net)
-      # net = layers.Activation('relu')(net)
+        # add dense layers
+        net = layers.Dense(units=32, activation=None)(states)
+        net = layers.BatchNormalization()(net)
+        net = layers.Activation('relu')(net)
+        net = layers.Dense(units=32, activation=None)(net)
+        net = layers.BatchNormalization()(net)
+        net = layers.Activation('relu')(net)
+        net = layers.Dense(units=32, activation='relu')(net)      
+        # net = layers.BatchNormalization()(net)
+        # net = layers.Activation('relu')(net)
 
       
-      # squish outputs between 0 and 1
-      raw_actions = layers.Dense(units=self.action_size,
-                                 activation='sigmoid',
-                                 name='raw_actions')(net)
-      
-      # re scale the values to appropriate range
-      actions = layers.Lambda(lambda x: (x * self.action_range) + self.action_low,
-                              name='actions')(raw_actions)
-      # create the model
-      self.model = models.Model(inputs=states, outputs=actions)
-      
-      # define loss function
-      action_gradients = layers.Input(shape=(self.action_size,))
-      loss = K.mean(-action_gradients*actions)
-      # define optimizer
-      optimizer = optimizers.Adam()
-      # define training function
-      updates_op = optimizer.get_updates(params=self.model.trainable_weights, loss=loss)
-      self.train_fn = K.function(inputs=[self.model.input, action_gradients, K.learning_phase()],
-                                 outputs=[], updates=updates_op)
+        # squish outputs between 0 and 1
+        raw_actions = layers.Dense(units=self.action_size,
+                                   activation='sigmoid',
+                                   name='raw_actions')(net)
+        
+        # re scale the values to appropriate range
+        actions = layers.Lambda(lambda x: (x * self.action_range) + self.action_low,
+                                name='actions')(raw_actions)
+        # create the model
+        self.model = models.Model(inputs=states, outputs=actions)
+        
+        # define loss function
+        action_gradients = layers.Input(shape=(self.action_size,))
+        loss = K.mean(-action_gradients*actions)
+        # define optimizer
+        optimizer = optimizers.Adam()
+        # define training function
+        updates_op = optimizer.get_updates(params=self.model.trainable_weights, loss=loss)
+        self.train_fn = K.function(inputs=[self.model.input, action_gradients, K.learning_phase()],
+                                   outputs=[], updates=updates_op)
 
 
 class Critic:
@@ -166,7 +169,20 @@ class Task1_Policy(BaseAgent):
         self.last_state = None
         self.last_action = None
 
-        self.step_count = 0
+        self.step_count = 1
+        self.reward_vector = []
+        self.episode_count = 0
+        # self.reward_file = open("task1.csv", "w")
+        # self.reward_file.write("EpisodeNumber, RewardValue\n")
+        self.reward_file_open = True
+            self.stats_filename = os.path.join(
+                util.get_param('out'),
+                "stats_{}.csv".format(util.get_timestamp()))
+        self.stats_columns = ['episode', 'total_reward']
+        self.episode_num = 1
+        print "Saving stats {} to {}".format(self.stats_columns, self.stats_filename))
+
+
 
     def get_step_count(self):
         return self.step_count
@@ -182,8 +198,8 @@ class Task1_Policy(BaseAgent):
         return complete_action
 
     def step(self, state, reward, done):
-        self.step_count += 1
-        # print ("STEPPING")
+        # self.step_count += 1
+        self.reward_vector.append(reward)
         # Choose an action
         state_unp = self.preprocess_state(state)
         # scale to [0.0, 1.0]
@@ -192,12 +208,14 @@ class Task1_Policy(BaseAgent):
         state = state.reshape(1, -1)
         # pass into act() method to produce actions
         action = self.act(state)
+    
         if self.step_count % 100 == 0:
             self.step_count = 0
             print ("\n\n...In Stepping...")
             print ("unprocessed state:\n{0}".format(state_unp))
             print ("preprocessed state:\n{0}".format(state))
             print ("resulting action:\n{0}".format(action))
+    
 
         # Save experience / reward
         if self.last_state is not None and self.last_action is not None:
@@ -214,7 +232,15 @@ class Task1_Policy(BaseAgent):
         # self.step_count += 1
         
         if done:
-            print ("reward:\t{0}".format(reward))
+            avg_reward = sum(self.reward_vector)/len(self.reward_vector)
+            print ("reward:\t{0}".format(avg_reward))
+            if self.reward_file_open:
+                self.episode_count += 1
+                self.reward_file.write("{0},{1}\n".format(self.episode_count, avg_reward))
+                if self.episode_count == 10:
+                    self.reward_file.close()
+                    self.reward_file_open = False
+            self.reward_vector[:] = []
             
         return self.postprocess_action(action)
 
@@ -225,11 +251,13 @@ class Task1_Policy(BaseAgent):
         # print ("actions:")
         # print (actions)
         noise = self.noise.sample()
+    
         if self.step_count % 100 == 0:
             print ("\n...In Acting...")
             print ("reshaped input states:\n{0}".format(states))
             print ("resulting actions:\n{0}".format(actions))
             print ("Noise:\n{0}".format(noise))
+    
         return actions + noise
 
     def learn(self, experiences):
