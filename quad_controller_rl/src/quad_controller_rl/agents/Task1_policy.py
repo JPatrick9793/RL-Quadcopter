@@ -103,6 +103,7 @@ class Critic:
             inputs=[*self.model.input, K.learning_phase()],
             outputs=action_gradients)
         
+        
 class ReplayBuffer:
     def __init__(self, size=10):
         self.size = size
@@ -150,42 +151,40 @@ class Task1_Policy(BaseAgent):
         self.actor_local = Actor(self.state_size, self.action_size, self.action_low, self.action_high)
         # duplicate Actor object for fixed Q
         self.actor_target = Actor(self.state_size, self.action_size, self.action_low, self.action_high)
+        self.actor_target.model.set_weights(self.actor_local.model.get_weights())
         
         # Critic object
         self.critic_local = Critic(self.state_size, self.action_size)
         # duplicate Critic object for fixed Q
         self.critic_target = Critic(self.state_size, self.action_size)
-        
         self.critic_target.model.set_weights(self.critic_local.model.get_weights())
-        self.actor_target.model.set_weights(self.actor_local.model.get_weights())
         
         self.noise = OUNoise(self.action_size)
         self.buffer_size = 100
         self.batch_size = 16
         self.memory = ReplayBuffer(self.buffer_size)
-        
         self.gamma = 0.99
         self.tau = 0.001
+        
         self.last_state = None
         self.last_action = None
-
-        self.step_count = 1
         self.reward_vector = []
         self.episode_count = 0
-        # self.reward_file = open("task1.csv", "w")
-        # self.reward_file.write("EpisodeNumber, RewardValue\n")
-        self.reward_file_open = True
-            self.stats_filename = os.path.join(
-                util.get_param('out'),
-                "stats_{}.csv".format(util.get_timestamp()))
+        
+        # Save episode stats
+        self.stats_filename = os.path.join(
+            util.get_param('out'),
+            "stats_{}.csv".format(util.get_timestamp()))
         self.stats_columns = ['episode', 'total_reward']
         self.episode_num = 1
-        print "Saving stats {} to {}".format(self.stats_columns, self.stats_filename))
-
-
-
-    def get_step_count(self):
-        return self.step_count
+        print("Saving stats {} to {}".format(self.stats_columns, self.stats_filename))
+   
+    def write_stats(self, stats):
+        df_stats = pd.DataFrame([stats], columns=self.stats_columns)
+        df_stats.to_csv(self.stats_filename,
+                        mode='a',
+                        index=False,
+                        header=not os.path.isfile(self.stats_filename))
         
     def preprocess_state(self, state):
         """Reduce state vector to relevant dimensions."""
@@ -198,7 +197,6 @@ class Task1_Policy(BaseAgent):
         return complete_action
 
     def step(self, state, reward, done):
-        # self.step_count += 1
         self.reward_vector.append(reward)
         # Choose an action
         state_unp = self.preprocess_state(state)
@@ -208,38 +206,23 @@ class Task1_Policy(BaseAgent):
         state = state.reshape(1, -1)
         # pass into act() method to produce actions
         action = self.act(state)
-    
-        if self.step_count % 100 == 0:
-            self.step_count = 0
-            print ("\n\n...In Stepping...")
-            print ("unprocessed state:\n{0}".format(state_unp))
-            print ("preprocessed state:\n{0}".format(state))
-            print ("resulting action:\n{0}".format(action))
-    
 
         # Save experience / reward
         if self.last_state is not None and self.last_action is not None:
             self.memory.add(self.last_state, self.last_action, reward, state, done)
             
-        if len(self.memory) > self.batch_size: # and self.step_count % 100 == 0:
-            # self.step_count = 0
+        if len(self.memory) > self.batch_size:
             experiences = self.memory.sample(self.batch_size)
             self.learn(experiences)
 
         self.last_state = state
         self.last_action = action
         
-        # self.step_count += 1
-        
         if done:
-            avg_reward = sum(self.reward_vector)/len(self.reward_vector)
+            avg_reward = sum(self.reward_vector)
             print ("reward:\t{0}".format(avg_reward))
-            if self.reward_file_open:
-                self.episode_count += 1
-                self.reward_file.write("{0},{1}\n".format(self.episode_count, avg_reward))
-                if self.episode_count == 10:
-                    self.reward_file.close()
-                    self.reward_file_open = False
+            self.write_stats([self.episode_num, self.total_reward])
+            self.episode_num += 1
             self.reward_vector[:] = []
             
         return self.postprocess_action(action)
@@ -251,12 +234,6 @@ class Task1_Policy(BaseAgent):
         # print ("actions:")
         # print (actions)
         noise = self.noise.sample()
-    
-        if self.step_count % 100 == 0:
-            print ("\n...In Acting...")
-            print ("reshaped input states:\n{0}".format(states))
-            print ("resulting actions:\n{0}".format(actions))
-            print ("Noise:\n{0}".format(noise))
     
         return actions + noise
 
