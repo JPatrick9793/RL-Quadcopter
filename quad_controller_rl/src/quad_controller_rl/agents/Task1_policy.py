@@ -148,16 +148,47 @@ class Task1_Policy(BaseAgent):
             self.task.observation_space.shape, self.task.action_space.shape,
             self.state_size, self.action_size))
         
-        # Actor object
-        self.actor_local = Actor(self.state_size, self.action_size, self.action_low, self.action_high)
-        # duplicate Actor object for fixed Q
-        self.actor_target = Actor(self.state_size, self.action_size, self.action_low, self.action_high)
-        self.actor_target.model.set_weights(self.actor_local.model.get_weights())
+        ################
+        # Save weights #
+        ################
+        self.load_weights = True
+        self.save_weights_every = 10  # save weights every n episodes, None to disable
+        self.model_dir = util.get_param('out')  # you can use a separate subdirectory for each task and/or neural net architecture
+        self.model_name = "my-model"
+        self.model_ext = ".h5"
+        if self.load_weights or self.save_weights_every:
+            self.actor_filename = os.path.join(self.model_dir,
+                "{}_actor{}".format(self.model_name, self.model_ext))
+            self.critic_filename = os.path.join(self.model_dir,
+                "{}_critic{}".format(self.model_name, self.model_ext))
+            print("Actor filename :", self.actor_filename)  # [debug]
+            print("Critic filename:", self.critic_filename)  # [debug]
         
-        # Critic object
+        ###################################
+        # CREATE ACTOR AND CRITIC OBJECTS #
+        ###################################
+        self.actor_local = Actor(self.state_size, self.action_size, self.action_low, self.action_high)
+        self.actor_target = Actor(self.state_size, self.action_size, self.action_low, self.action_high)
         self.critic_local = Critic(self.state_size, self.action_size)
-        # duplicate Critic object for fixed Q
         self.critic_target = Critic(self.state_size, self.action_size)
+        
+        ################################################
+        # Load pre-trained model weights, if available #
+        ################################################
+        if self.load_weights and os.path.isfile(self.actor_filename):
+            try:
+                self.actor_local.model.load_weights(self.actor_filename)
+                self.critic_local.model.load_weights(self.critic_filename)
+                print("Model weights loaded from file!")  # [debug]
+            except Exception as e:
+                print("Unable to load model weights from file!")
+                print("{}: {}".format(e.__class__.__name__, str(e)))
+        if self.save_weights_every:
+            print("Saving model weights", "every {} episodes".format(
+                self.save_weights_every) if self.save_weights_every else "disabled")  # [debug]
+        
+        
+        self.actor_target.model.set_weights(self.actor_local.model.get_weights())
         self.critic_target.model.set_weights(self.critic_local.model.get_weights())
         
         self.noise = OUNoise(self.action_size)
@@ -172,6 +203,8 @@ class Task1_Policy(BaseAgent):
         self.reward_vector = []
         self.episode_count = 0
         self.step_count = 0
+        # Episode variables
+        self.episode = 0
         
         # Save episode stats
         self.total_reward = 0
@@ -181,6 +214,8 @@ class Task1_Policy(BaseAgent):
         self.stats_columns = ['episode', 'total_reward']
         self.episode_num = 1
         print("Saving stats {} to {}".format(self.stats_columns, self.stats_filename))
+        
+        
    
     def write_stats(self, stats):
         df_stats = pd.DataFrame([stats], columns=self.stats_columns)
@@ -224,6 +259,12 @@ class Task1_Policy(BaseAgent):
         self.last_action = action
         
         if done:
+            # Save model weights at regular intervals
+            if self.save_weights_every and self.episode % self.save_weights_every == 0:
+                self.actor_local.model.save_weights(self.actor_filename)
+                self.critic_local.model.save_weights(self.critic_filename)
+                print("Model weights saved at episode", self.episode)  # [debug]
+                
             avg_reward = self.total_reward / self.step_count
             self.write_stats([self.episode_num, self.total_reward])
             self.episode_num += 1
