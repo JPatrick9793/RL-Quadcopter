@@ -192,8 +192,8 @@ class Task1_Policy(BaseAgent):
         self.critic_target.model.set_weights(self.critic_local.model.get_weights())
         
         self.noise = OUNoise(self.action_size)
-        self.buffer_size = 100
-        self.batch_size = 16
+        self.buffer_size = 500
+        self.batch_size = 32
         self.memory = ReplayBuffer(self.buffer_size)
         self.gamma = 0.99
         self.tau = 0.001
@@ -263,10 +263,11 @@ class Task1_Policy(BaseAgent):
             if self.save_weights_every and self.episode % self.save_weights_every == 0:
                 self.actor_local.model.save_weights(self.actor_filename)
                 self.critic_local.model.save_weights(self.critic_filename)
-                print("Model weights saved at episode", self.episode)  # [debug]
+                print("Model weights saved at episode", self.episode_num)  # [debug]
                 
             avg_reward = self.total_reward / self.step_count
             self.write_stats([self.episode_num, self.total_reward])
+            print ("Total Reward:\t{0}".format(self.total_reward))
             self.episode_num += 1
             self.total_reward = 0
             self.step_count = 0
