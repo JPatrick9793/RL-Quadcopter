@@ -3,6 +3,7 @@
 import numpy as np
 import os
 import pandas as pd
+from quad_controller_rl import util
 from quad_controller_rl.agents.base_agent import BaseAgent
 import keras
 from keras import layers, models, optimizers
@@ -170,8 +171,10 @@ class Task1_Policy(BaseAgent):
         self.last_action = None
         self.reward_vector = []
         self.episode_count = 0
+        self.step_count = 0
         
         # Save episode stats
+        self.total_reward = 0
         self.stats_filename = os.path.join(
             util.get_param('out'),
             "stats_{}.csv".format(util.get_timestamp()))
@@ -197,7 +200,9 @@ class Task1_Policy(BaseAgent):
         return complete_action
 
     def step(self, state, reward, done):
-        self.reward_vector.append(reward)
+        # self.reward_vector.append(reward)
+        self.total_reward += reward
+        self.step_count += 1
         # Choose an action
         state_unp = self.preprocess_state(state)
         # scale to [0.0, 1.0]
@@ -219,11 +224,11 @@ class Task1_Policy(BaseAgent):
         self.last_action = action
         
         if done:
-            avg_reward = sum(self.reward_vector)
-            print ("reward:\t{0}".format(avg_reward))
+            avg_reward = self.total_reward / self.step_count
             self.write_stats([self.episode_num, self.total_reward])
             self.episode_num += 1
-            self.reward_vector[:] = []
+            self.total_reward = 0
+            self.step_count = 0
             
         return self.postprocess_action(action)
 
