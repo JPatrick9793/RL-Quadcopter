@@ -247,7 +247,7 @@ class Task3_Policy(BaseAgent):
         self.total_reward = 0
         self.stats_filename = os.path.join(
             util.get_param('out'),
-            "Task_03/stats_{}.csv".format(util.get_timestamp()))
+            "Task_02/stats_{}.csv".format(util.get_timestamp()))
         self.stats_columns = ['episode', 'total_reward']
         self.episode_num = 1
         print("Saving stats {} to {}".format(self.stats_columns, self.stats_filename))
