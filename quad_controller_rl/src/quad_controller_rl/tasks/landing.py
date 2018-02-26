@@ -1,12 +1,9 @@
-"""Takeoff task."""
-
 import numpy as np
 from gym import spaces
 from geometry_msgs.msg import Vector3, Point, Quaternion, Pose, Twist, Wrench
 from quad_controller_rl.tasks.base_task import BaseTask
 
 class Landing(BaseTask):
-    """Simple task where the goal is to lift off the ground and reach a target height."""
 
     def __init__(self):
         # State space: <position_x, .._y, .._z, orientation_x, .._y, .._z, .._w>
@@ -28,12 +25,6 @@ class Landing(BaseTask):
         self.max_distance = 20.0
         self.max_duration = 5.0  # secs
         self.min_duration = 2.0
-        # self.target_z = 10.0  # target height (z position) to reach for successful takeoff
-        
-        
-        self.target_vector = np.array([0.0, 0.0, 0.0]) # constrain the position to be directly above starting point
-        self.target_pose = np.array([0.0, 0.0, 0.0, 0.0])
-        self.target_velocity = np.array([0.0, 0.0, 0.0])
 
         self.last_timestamp = None
         self.last_position = None
@@ -58,53 +49,46 @@ class Landing(BaseTask):
         if self.last_timestamp is None:
             velocity = np.array([0.0, 0.0, 0.0])
         else:
-            velocity = (position - self.last_position) / max(timestamp - self.last_timestamp, 1e-03)
+            velocity = (position - self.last_position) / max(abs(timestamp - self.last_timestamp),
+                                                             1e-05)
         
         # set state variale
-        state = np.concatenate([position, orientation, velocity]) # add in velocity
+        state = np.concatenate([position, orientation, velocity])       # add in velocity
         
-        # Reset instance variables
-        self.last_timestamp = timestamp
+        self.last_timestamp = timestamp                                 # Reset instance variables
         self.last_position = position
-
-        # Compute reward / penalty and check if this episode is complete
-        done = False
-
-        # reward is negative square abs distance
-        x = np.linalg.norm(self.target_vector-state[0:3])
-        v = np.linalg.norm(self.target_velocity-state[7:10])
-        euc_orientation = np.linalg.norm(self.target_pose-state[3:7])
-
-        # print ("euc_distance:\t{0}".format(euc_distance))
-        '''
-        reward = -(0.2*(euc_velocity**2)/(0.2*euc_distance+0.1) +
-                   0.6*(euc_distance**2) +
-                   0.2*(euc_velocity))
-        '''
-        reward = 200 -abs(x) -abs(v)
-
-        '''
-        # if distance is too great, end episode and add penalty
-        if x >= self.max_distance:
-            reward -= 500.0
-            done = True 
-        '''
+        done = False                                                    # initilize done
         
-        if state[2] <= 0.2:
-            done = True
+        ###############################
+        # CALCULATE INDIVIDUAL ERRORS #
+        ###############################
         
+        x = np.linalg.norm(np.array([0.0, 0.0, 0.0]) - state[0:3])     # distance between copter and origin
+        o = np.linalg.norm(self.target_pose-state[3:7])                # NOT NEEDED BECAUSE SPACE CONSTRAINED
+        v = np.linalg.norm(np.array([0.0, 0.0, 0.0]) - state[7:10])    # velocity magnitude
+        
+        # v_error = (x**2 + 5*v**2)
+        x_error = abs(x)                           # error is abs distance from 0.0
+        v_error = abs(v)/abs(x+0.1)                # prevent divide by 0
+        
+        reward = 200 - x_error - v_error           # x and v errors
+        
+        if state[2] <= 0.2:                        # if the quadcopter hits the ground
+            done = True                            # end the episode
+            if time_stamp < self.min_duration:     # if episode ended too soon
+                reward -= 10000                    # give penalty
+                
+        if timestamp > self.max_duration:          # if time limit is exceeded
+            done = True                            # end current episode
 
-        # if timestamp exceeds time limit, end episode
-        if timestamp > self.max_duration:
-            done = True
-            # reward += 1000
-
-        reward = (1/200)*reward # scale down so no exploding gradients
-        # Take one RL step, passing in current state and reward, and obtain action
-        # Note: The reward passed in here is the result of past action(s)
+        reward = (1/200)*reward                    # scale down so no exploding gradients
+        
         action = self.agent.step(state, reward, done)
 
-        # Convert to proper force command (a Wrench object) and return it
+        
+        ###################################################################
+        # Convert to proper force command (a Wrench object) and return it #
+        ###################################################################
         if action is not None:
             # print ("Action is not None!")
             action = np.clip(action.flatten(), self.action_space.low, self.action_space.high)  # flatten, clamp to action space limits
