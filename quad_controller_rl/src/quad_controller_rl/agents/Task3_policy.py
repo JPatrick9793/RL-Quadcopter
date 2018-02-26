@@ -253,12 +253,19 @@ class Task3_Policy(BaseAgent):
         self.episode_num = 1
         print("Saving stats {} to {}".format(self.stats_columns, self.stats_filename))
         
-
+    ###########################
+    #   RESET STEP VARIABLES  #
+    ###########################
+        
     def reset(self):
         self.last_action = None
         self.last_state = None
         self.total_reward = 0
         self.step_count = 0
+        
+    ###########################
+    #   WRITE STATS TO CSV    #
+    ###########################
         
     def write_stats(self, stats):
         df_stats = pd.DataFrame([stats], columns=self.stats_columns)
@@ -267,14 +274,26 @@ class Task3_Policy(BaseAgent):
                         index=False,
                         header=not os.path.isfile(self.stats_filename))
         
+    ###########################
+    #   PREPROCESS STATE      #
+    ###########################
+        
     def preprocess_state(self, state):
         return np.array([state[2], state[9]])  # position only
+      
+    ###########################
+    #   POSTPROCESS STATE     #
+    ###########################
       
     def postprocess_action(self, action):
         complete_action = np.zeros(self.task.action_space.shape)
         complete_action[2] = action
         return complete_action
 
+    ###########################
+    #   STEP                  #
+    ###########################
+    
     def step(self, state, reward, done):
         self.total_reward += reward                   # add reward to total
         self.step_count += 1                          # increase step count
@@ -298,6 +317,10 @@ class Task3_Policy(BaseAgent):
         self.last_state = state           # Set last state before reset
         self.last_action = action         # Set last action before reset
         
+        ##############
+        #   IF DONE  #
+        ##############
+        
         if done:
             if self.save_weights_every and self.episode % self.save_weights_every == 0:
                 self.actor_local.model.save_weights(self.actor_filename)
@@ -313,11 +336,19 @@ class Task3_Policy(BaseAgent):
             
         return self.postprocess_action(action)    # return the action
 
+    ######################
+    #   ACT METHOD       #
+    ######################
+    
     def act(self, states):
         states = np.reshape(states, [-1, self.state_size])
         actions = self.actor_local.model.predict(states)
         noise = self.noise.sample()
         return actions + noise
+      
+    ########################
+    #   LEARN METHOD       #
+    ########################
 
     def learn(self, experiences):
         # Convert experience tuples to separate arrays for each element (states, actions, rewards, etc.)
@@ -342,6 +373,11 @@ class Task3_Policy(BaseAgent):
         # Soft-update target models
         self.soft_update(self.critic_local.model, self.critic_target.model)
         self.soft_update(self.actor_local.model, self.actor_target.model)
+        
+        
+    ######################
+    #   SOFT UPDATE      #
+    ######################
 
     def soft_update(self, local_model, target_model):
         """Soft update model parameters."""
@@ -350,6 +386,10 @@ class Task3_Policy(BaseAgent):
 
         new_weights = self.tau * local_weights + (1 - self.tau) * target_weights
         target_model.set_weights(new_weights)
+        
+######################
+#   NOISE MODEL      #
+######################
         
 class OUNoise:
     def __init__(self, size, mu=None, theta=0.15, sigma=0.1):
