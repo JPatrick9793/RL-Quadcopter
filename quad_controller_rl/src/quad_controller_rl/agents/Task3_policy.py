@@ -1,5 +1,3 @@
-"""ADJUSTED FOR TASK 1"""
-
 import numpy as np
 import os
 import pandas as pd
@@ -13,103 +11,99 @@ from collections import namedtuple
 import heapq
 
 Experience_Replay = namedtuple("Experience_replay",
-                               field_names=['state', 'action', 'reward',
-                                            'next_state', 'done'])
+                               field_names=['state', 'action', 'reward', 'next_state', 'done'])
 
+
+#############
+#   ACTOR   #
+#############
 
 class Actor:
     def __init__(self, state_size, action_size, action_low, action_high):
-        self.state_size = state_size
-        # print ("self.state_size:\n{0}".format(self.state_size))
+        self.state_size = state_size                                # SET CORRESPONDING VARIABLES
         self.action_size = action_size
-        # print ("self.action_size:\n{0}".format(self.action_size))
         self.action_low = action_low
-        # print ("self.action_low:\n{0}".format(self.action_low))
         self.action_high = action_high
-        #print ("self.action_high:\n{0}".format(self.action_high))
-        self.action_range = self.action_high - self.action_low
-        # print ("self.action_range:\n{0}".format(self.action_range))
-        # build the NN model
-        self.build_NN()
+        self.action_range = self.action_high - self.action_low      # SET THE RANGE
+        self.build_NN()                                             # BUILD THE MODEL
 
     def build_NN(self):
-        states = layers.Input(shape=(self.state_size,), name='states')
-      
-        # add dense layers
-        net = layers.Dense(units=32, activation=None)(states)
-        # net = layers.BatchNormalization()(net)
-        net = layers.Activation('relu')(net)
-        net = layers.Dense(units=32, activation=None)(net)
-        # net = layers.BatchNormalization()(net)
-        net = layers.Activation('relu')(net)
-        net = layers.Dense(units=32, activation='relu')(net)      
-        # net = layers.BatchNormalization()(net)
-        # net = layers.Activation('relu')(net)
-
-      
-        # squish outputs between 0 and 1
-        raw_actions = layers.Dense(units=self.action_size,
-                                   activation='sigmoid',
-                                   name='raw_actions')(net)
+        states = layers.Input(shape=(self.state_size,), name='states')    # INPUT
+        net = layers.Dense(units=32, activation=None)(states)             # FIRST LAYER
+        net = layers.BatchNormalization()(net)                            # NORMALIZE
+        net = layers.Activation('relu')(net)                              # ACTIVATION FUNCTION
+        net = layers.Dense(units=32, activation=None)(net)                # SECOND LAYER
+        net = layers.BatchNormalization()(net)                            # NORMALIZE
+        net = layers.Activation('relu')(net)                              # ACTIVATION
+        net = layers.Dense(units=32, activation='relu')(net)              # THIRD LAYER, NO NORMALIZE 
+        
+        raw_actions = layers.Dense(units=self.action_size,                # ACTION SIZE IS OUTPUT
+                                   activation='sigmoid',                  # SIGMOID TO SQUISH
+                                   name='raw_actions')(net)               # BETWEEN [0.0, 1.0]
         
         # re scale the values to appropriate range
-        actions = layers.Lambda(lambda x: (x * self.action_range) + self.action_low,
+        actions = layers.Lambda(lambda x: (x * self.action_range) +self.action_low,
                                 name='actions')(raw_actions)
-        # create the model
-        self.model = models.Model(inputs=states, outputs=actions)
         
-        # define loss function
-        action_gradients = layers.Input(shape=(self.action_size,))
-        loss = K.mean(-action_gradients*actions)
-        # define optimizer
-        optimizer = optimizers.Adam()
-        # define training function
-        updates_op = optimizer.get_updates(params=self.model.trainable_weights, loss=loss)
-        self.train_fn = K.function(inputs=[self.model.input, action_gradients, K.learning_phase()],
-                                   outputs=[], updates=updates_op)
+        self.model = models.Model(inputs=states, outputs=actions)         # create the model
+        
+        action_gradients = layers.Input(shape=(self.action_size,))        # define input for action gradients
+        loss = K.mean(-action_gradients*actions)                          # define loss function
+        
+        optimizer = optimizers.Adam(lr=0.0001)                            # define optimizer (lower learning rate??)
+        updates_op = optimizer.get_updates(                               # define training function
+            params=self.model.trainable_weights,
+            loss=loss)
+        
+        self.train_fn = K.function(
+            inputs=[self.model.input, action_gradients, K.learning_phase()],
+            outputs=[],
+            updates=updates_op)
 
+#############
+#   CRITIC  #
+#############
 
 class Critic:
     def __init__(self, state_size, action_size):
-        self.state_size = state_size
-        self.action_size = action_size
-        # build the NN model
-        self.build_NN()
+        self.state_size = state_size                # define state size (should be 2)
+        self.action_size = action_size              # define action size (should be 1)
+        self.build_NN()                             # build the NN model
         
-    def build_NN(self):
-        # initialize state and action inputs
-        states = layers.Input(shape=(self.state_size,), name='states')
-        # layers for state network
-        net_states = layers.Dense(units=16, activation='relu')(states)
-        net_states = layers.Dense(units=16, activation='relu')(net_states)
+    def build_NN(self):                                                      
+        # Try to mimic Actor ??
+        states = layers.Input(shape=(self.state_size,), name='states')               # define states input
+        net_states = layers.Dense(units=16, activation='None')(states)               # first layer 
+        net_states = layers.BatchNormalization()(net_states)                         # first normalize
+        net_states = layers.Activation('relu')(net_states)                           # first activation function
+        net_states = layers.Dense(units=16, activation='None')(net_states)           # second layer 
+        net_states = layers.BatchNormalization()(net_states)                         # second normalize
+        net_states = layers.Activation('relu')(net_states)                           # second activation function
+        net_states = layers.Dense(units=16, activation='relu')(net_states)           # third layer, no activation
 
+        # try to mimic Actor again ??
+        actions = layers.Input(shape=(self.action_size,), name='actions')            # define inputs
+        net_actions = layers.Dense(units=16, activation='None')(actions)             # first layer 
+        net_actions = layers.BatchNormalization()(net_actions)                       # first normalize
+        net_actions = layers.Activation('relu')(net_actions)                         # first activation function
+        net_actions = layers.Dense(units=16, activation='None')(net_actions)         # second layer 
+        net_actions = layers.BatchNormalization()(net_actions)                       # second normalize
+        net_actions = layers.Activation('relu')(net_actions)                         # second activation function
+        net_actions = layers.Dense(units=16, activation='relu')(net_actions)         # third layer, no activation
+        
+        # combination
+        net = layers.Add()([net_states, net_actions])                                # combine state and actions
+        net = layers.Activation('relu')(net)                                         # fourth activation
+        net = layers.Dense(units=16, activation='relu')(actions)                     # fifth activation
 
-        actions = layers.Input(shape=(self.action_size,), name='actions')
-        # layers for actions network
-        net_actions = layers.Dense(units=16, activation='relu')(actions)
-        net_actions = layers.Dense(units=16, activation='relu')(net_actions)
+        Q_values = layers.Dense(units=1, name='q_values')(net)                       # generate a Q_value
 
+        self.model = models.Model(inputs=[states, actions], outputs=Q_values)        # create the model
 
+        optimizer = optimizers.Adam(lr=0.0001)                              # set the optimizer
+        self.model.compile(optimizer=optimizer, loss='mse')                 # compile the model
 
-        # combine state and actions
-        net = layers.Add()([net_states, net_actions])
-        net = layers.Activation('relu')(net)
-
-        # Add more layers to combined network if needed
-        net = layers.Dense(units=16, activation='relu')(actions)
-
-        # generate a Q_value
-        Q_values = layers.Dense(units=1, name='q_values')(net)
-
-        # create the model
-        self.model = models.Model(inputs=[states, actions], outputs=Q_values)
-
-        # set the optimizer
-        optimizer = optimizers.Adam()
-        self.model.compile(optimizer=optimizer, loss='mse')
-
-        # calculate the gradients with respect to actions
-        action_gradients = K.gradients(Q_values, actions)
+        action_gradients = K.gradients(Q_values, actions)                   # calculate the gradients with respect to actions
 
         # function to get the action gradients
         # to be used by Actor
@@ -118,6 +112,9 @@ class Critic:
             outputs=action_gradients)
 
 
+###################
+# PRIORITY BUFFER #
+###################
 
 '''
 class Pair(object):
@@ -132,7 +129,9 @@ class Pair(object):
         return self.reward < other.reward
 '''
         
-
+###################
+#  REPLAY BUFFER  #
+###################
 
 class ReplayBuffer:
     def __init__(self, size=1000):
@@ -140,10 +139,8 @@ class ReplayBuffer:
         self.memory = []
         self.idx = 0
     def add(self, state, action, reward, next_state, done):
-
         # set = Pair(reward, state, action, next_state, done)
         set = Experience_Replay(state, action, reward, next_state, done)
-
         if len(self.memory) < self.size:
             # heapq.heappush(self.memory, set)
             self.memory.append(set)
@@ -151,13 +148,10 @@ class ReplayBuffer:
             # trash = heapq.heappushpop(self.memory, set)
             self.memory[self.idx] = set
             self.idx = (self.idx + 1) % self.size
-
     def sample(self, batch_size=64):
         return random.sample(self.memory, batch_size)
-
     def reset(self):
         self.memory[:] = []
-
     def __len__(self):
         return len(self.memory)
 
@@ -171,11 +165,6 @@ class Task3_Policy(BaseAgent):
         self.state_high = self.task.observation_space.high[0:3]
 
         self.state_range = self.state_high - self.state_low
-        print ("Original state_low:\t{0}".format(self.task.observation_space.low))
-        print ("New state_low:\t{0}".format(self.state_low))
-        print ("Original state_high:\t{0}".format(self.task.observation_space.high))
-        print ("New state_high:\t{0}".format(self.state_high))
-        # self.action_size = 3
         self.action_size = 1
         # self.action_low = task.action_space.low[0:3]
         self.action_low = task.action_space.low[2]
@@ -192,7 +181,7 @@ class Task3_Policy(BaseAgent):
         self.load_weights = True
         self.save_weights_every = 10  # save weights every n episodes, None to disable
         self.model_dir = util.get_param('out')  # you can use a separate subdirectory for each task and/or neural net architecture
-        self.model_name = "task2-hover"
+        self.model_name = "task3-LANDING"
         self.model_ext = ".h5"
         if self.load_weights or self.save_weights_every:
             # Define Actor weights h5 file
@@ -231,6 +220,7 @@ class Task3_Policy(BaseAgent):
         ###############
         # SET WEIGHTS #
         ###############
+        # target model gets weights from local model
         self.actor_target.model.set_weights(self.actor_local.model.get_weights())
         self.critic_target.model.set_weights(self.critic_local.model.get_weights())
 
@@ -250,7 +240,6 @@ class Task3_Policy(BaseAgent):
         self.reward_vector = []
         self.episode_count = 0
         self.step_count = 0
-        # Episode variables
         self.episode = 0
         
         ###############################
@@ -278,39 +267,28 @@ class Task3_Policy(BaseAgent):
                         header=not os.path.isfile(self.stats_filename))
         
     def preprocess_state(self, state):
-        """Reduce state vector to relevant dimensions."""
-        # print (":::::::::::::::::::::::::::::::::::")
-        # print ("State to be processed:\n{0}".format(state))
         return np.array([state[2], state[9]])  # position only
       
     def postprocess_action(self, action):
-        """Return complete action vector."""
-        complete_action = np.zeros(self.task.action_space.shape)  # shape: (6,)
-        # complete_action[0:3] = action  # linear force only
+        complete_action = np.zeros(self.task.action_space.shape)
         complete_action[2] = action
         return complete_action
 
     def step(self, state, reward, done):
-
-        # print ("State received:\n{0}".format(self.task.observation_space))
+      
+        self.total_reward += reward                   # add reward to total
+        self.step_count += 1                          # increase step count
+        state = self.preprocess_state(state)          # convert state to only necessary components
         
-        self.total_reward += reward
-        self.step_count += 1
-        # Choose an action
-        state = self.preprocess_state(state)
-        # print ("Before:\n{0}".format(state))
-        # scale to [0.0, 1.0]
+        # normalize position between [0, 1]
         state[0] = (state[0]-self.state_low[0])/(self.state_high[0]-self.state_low[0])
-        # print ("After:\n{0}".format(state))
-        # state = (state_unp - self.state_low)/self.state_range
-        # convert to row vector
-        state = state.reshape(1, -1)
-        # pass into act() method to produce actions
-        action = self.act(state)
+        
+        # state = state.reshape(1, -1)                  # convert to row vector
+        action = self.act(state)                      # call act method with current state
 
-        # Save experience / reward
+        # Add <LS, LA, R, S, D> to replay buffer
         if self.last_state is not None and self.last_action is not None:
-            self.memory.add(self.last_state, self.last_action, reward, state, done)
+            self.memory.add(state=self.last_state, action=self.last_action, reward=reward, next_state=state, done=done)
             
         if len(self.memory) > self.batch_size:
             experiences = self.memory.sample(self.batch_size)
