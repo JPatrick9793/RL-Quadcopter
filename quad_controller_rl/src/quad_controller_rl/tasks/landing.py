@@ -69,17 +69,17 @@ class Landing(BaseTask):
         
         # v_error = (x**2 + 5*v**2)
         x_error = abs(x)                           # error is abs distance from 0.0
-        v_error = abs(v)/abs(x+0.1)                # prevent divide by 0
+        v_error = abs(v)/(abs(x) + 0.1)            # prevent divide by 0
         
         reward = 200 - x_error - v_error           # x and v errors
         
         if state[2] <= 0.2:                        # if the quadcopter hits the ground
-            done = True                            # end the episode
-            if time_stamp < self.min_duration:     # if episode ended too soon
-                reward -= 10000                    # give penalty
+            done = True                            # end episode
+            reward += 1000                         # give reward
                 
         if timestamp > self.max_duration:          # if time limit is exceeded
             done = True                            # end current episode
+            reward -= 1000                         # give penalty
 
         reward = (1/200)*reward                    # scale down so no exploding gradients
         
