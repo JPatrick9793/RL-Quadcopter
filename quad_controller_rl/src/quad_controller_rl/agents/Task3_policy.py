@@ -257,8 +257,9 @@ class Task3_Policy(BaseAgent):
     def reset(self):
         self.last_action = None
         self.last_state = None
+        self.total_reward = 0
+        self.step_count = 0
         
-   
     def write_stats(self, stats):
         df_stats = pd.DataFrame([stats], columns=self.stats_columns)
         df_stats.to_csv(self.stats_filename,
@@ -275,7 +276,6 @@ class Task3_Policy(BaseAgent):
         return complete_action
 
     def step(self, state, reward, done):
-      
         self.total_reward += reward                   # add reward to total
         self.step_count += 1                          # increase step count
         state = self.preprocess_state(state)          # convert state to only necessary components
@@ -289,16 +289,16 @@ class Task3_Policy(BaseAgent):
         # Add <LS, LA, R, S, D> to replay buffer
         if self.last_state is not None and self.last_action is not None:
             self.memory.add(state=self.last_state, action=self.last_action, reward=reward, next_state=state, done=done)
-            
+        # Start Batch learning when possible    
         if len(self.memory) > self.batch_size:
             experiences = self.memory.sample(self.batch_size)
             self.learn(experiences)
-
-        self.last_state = state
-        self.last_action = action
+            
+        
+        self.last_state = state           # Set last state before reset
+        self.last_action = action         # Set last action before reset
         
         if done:
-            # Save model weights at regular intervals
             if self.save_weights_every and self.episode % self.save_weights_every == 0:
                 self.actor_local.model.save_weights(self.actor_filename)
                 self.critic_local.model.save_weights(self.critic_filename)
@@ -308,25 +308,18 @@ class Task3_Policy(BaseAgent):
             self.write_stats([self.episode_num, self.total_reward])
             print ("Total Reward:\t{0}".format(self.total_reward))
             print ("Average Reward:\t{0}".format(self.total_reward/self.step_count))
-            self.episode_num += 1
-            self.total_reward = 0
-            self.step_count = 0
+            self.episode += 1
             self.reset()
             
-        return self.postprocess_action(action)
+        return self.postprocess_action(action)    # return the action
 
     def act(self, states):
-        # print ("\nACTING")
         states = np.reshape(states, [-1, self.state_size])
         actions = self.actor_local.model.predict(states)
-        # print ("actions:")
-        # print (actions)
         noise = self.noise.sample()
-    
         return actions + noise
 
     def learn(self, experiences):
-        # print ("LEARNING!!!!!!!")
         # Convert experience tuples to separate arrays for each element (states, actions, rewards, etc.)
         states = np.vstack([e.state for e in experiences if e is not None])
         actions = np.array([e.action for e in experiences if e is not None]).astype(np.float32).reshape(-1, self.action_size)
@@ -359,10 +352,7 @@ class Task3_Policy(BaseAgent):
         target_model.set_weights(new_weights)
         
 class OUNoise:
-    """Ornstein-Uhlenbeck process."""
-
     def __init__(self, size, mu=None, theta=0.15, sigma=0.1):
-        """Initialize parameters and noise process."""
         self.size = size
         self.mu = mu if mu is not None else np.zeros(self.size)
         self.theta = theta
@@ -371,11 +361,9 @@ class OUNoise:
         self.reset()
 
     def reset(self):
-        """Reset the internal state (= noise) to mean (mu)."""
         self.state = self.mu
 
     def sample(self):
-        """Update internal state and return it as a noise sample."""
         x = self.state
         dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
         self.state = x + dx
