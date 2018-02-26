@@ -179,7 +179,7 @@ class Task3_Policy(BaseAgent):
         ################
         self.load_weights = True
         self.save_weights_every = 10  # save weights every n episodes, None to disable
-        self.model_dir = util.get_param('out')  # you can use a separate subdirectory for each task and/or neural net architecture
+        self.model_dir = util.get_param('agent')  # you can use a separate subdirectory for each task and/or neural net architecture
         self.model_name = "task2-HOVER"
         self.model_ext = ".h5"
         if self.load_weights or self.save_weights_every:
@@ -246,7 +246,7 @@ class Task3_Policy(BaseAgent):
         ###############################
         self.total_reward = 0
         self.stats_filename = os.path.join(
-            util.get_param('out'),
+            util.get_param('agent'),
             "Task_02/stats_{}.csv".format(util.get_timestamp()))
         self.stats_columns = ['episode', 'total_reward']
         self.episode_num = 1
