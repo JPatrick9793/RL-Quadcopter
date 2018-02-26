@@ -75,11 +75,11 @@ class Landing(BaseTask):
         
         if state[2] <= 0.2:                        # if the quadcopter hits the ground
             done = True                            # end episode
-            reward += 1000                         # give reward
+            reward += 50                           # give reward
                 
         if timestamp > self.max_duration:          # if time limit is exceeded
             done = True                            # end current episode
-            reward -= 1000                         # give penalty
+            reward -= 50                           # give penalty
 
         reward = (1/200)*reward                    # scale down so no exploding gradients
         
