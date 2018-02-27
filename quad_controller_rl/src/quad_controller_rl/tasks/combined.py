@@ -30,7 +30,8 @@ class Combined(BaseTask):
         
         # 0 = takeoff / hover
         # 1 = landing
-        self.which_task = 0
+        self.which_task = 0                # number to indicate which task the agent 
+        self.switch_task_after_eps = 5     # after 5 epsidos, switch tasks
 
     def reset(self):
         self.last_timestamp = None
@@ -87,6 +88,10 @@ class Combined(BaseTask):
             reward -= 100                          # give penalty
 
         reward = (1/100)*reward                    # scale down so no exploding gradients
+        
+        if self.agent.get_epCount() == self.switch_task_after_eps:
+            self.which_task = 1 if self.which_task == 0 else 0
+            self.agent.reset_epCount()
         
         action = self.agent.step(state, reward, done)
 
