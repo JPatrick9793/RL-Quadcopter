@@ -30,10 +30,10 @@ class Actor:
     def build_NN(self):
         states = layers.Input(shape=(self.state_size,), name='states')    # INPUT
         net = layers.Dense(units=32, activation=None)(states)             # FIRST LAYER
-        net = layers.BatchNormalization()(net)                            # NORMALIZE
+        # net = layers.BatchNormalization()(net)                            # NORMALIZE
         net = layers.Activation('relu')(net)                              # ACTIVATION FUNCTION
-        net = layers.Dense(units=32, activation=None)(net)                # SECOND LAYER
-        net = layers.BatchNormalization()(net)                            # NORMALIZE
+        net = layers.Dense(units=64, activation=None)(net)                # SECOND LAYER
+        # net = layers.BatchNormalization()(net)                            # NORMALIZE
         net = layers.Activation('relu')(net)                              # ACTIVATION
         net = layers.Dense(units=32, activation='relu')(net)              # THIRD LAYER, NO NORMALIZE 
         
@@ -50,7 +50,7 @@ class Actor:
         action_gradients = layers.Input(shape=(self.action_size,))        # define input for action gradients
         loss = K.mean(-action_gradients*actions)                          # define loss function
         
-        optimizer = optimizers.Adam(lr=0.0001)                            # define optimizer (lower learning rate??)
+        optimizer = optimizers.Adam(lr=0.0005)                            # define optimizer (lower learning rate??)
         updates_op = optimizer.get_updates(                               # define training function
             params=self.model.trainable_weights,
             loss=loss)
@@ -73,34 +73,34 @@ class Critic:
     def build_NN(self):                                                      
         # Try to mimic Actor ??
         states = layers.Input(shape=(self.state_size,), name='states')               # define states input
-        net_states = layers.Dense(units=16, activation=None)(states)               # first layer 
-        net_states = layers.BatchNormalization()(net_states)                         # first normalize
+        net_states = layers.Dense(units=32, activation=None)(states)               # first layer 
+        # net_states = layers.BatchNormalization()(net_states)                         # first normalize
         net_states = layers.Activation('relu')(net_states)                           # first activation function
-        net_states = layers.Dense(units=16, activation=None)(net_states)           # second layer 
-        net_states = layers.BatchNormalization()(net_states)                         # second normalize
+        net_states = layers.Dense(units=64, activation=None)(net_states)           # second layer 
+        # net_states = layers.BatchNormalization()(net_states)                         # second normalize
         net_states = layers.Activation('relu')(net_states)                           # second activation function
-        net_states = layers.Dense(units=16, activation='relu')(net_states)           # third layer, no activation
+        # net_states = layers.Dense(units=16, activation='relu')(net_states)           # third layer, no activation
 
         # try to mimic Actor again ??
         actions = layers.Input(shape=(self.action_size,), name='actions')            # define inputs
-        net_actions = layers.Dense(units=16, activation=None)(actions)             # first layer 
-        net_actions = layers.BatchNormalization()(net_actions)                       # first normalize
+        net_actions = layers.Dense(units=32, activation=None)(actions)             # first layer 
+        # net_actions = layers.BatchNormalization()(net_actions)                       # first normalize
         net_actions = layers.Activation('relu')(net_actions)                         # first activation function
-        net_actions = layers.Dense(units=16, activation=None)(net_actions)         # second layer 
-        net_actions = layers.BatchNormalization()(net_actions)                       # second normalize
+        net_actions = layers.Dense(units=64, activation=None)(net_actions)         # second layer 
+        # net_actions = layers.BatchNormalization()(net_actions)                       # second normalize
         net_actions = layers.Activation('relu')(net_actions)                         # second activation function
-        net_actions = layers.Dense(units=16, activation='relu')(net_actions)         # third layer, no activation
+        # net_actions = layers.Dense(units=16, activation='relu')(net_actions)         # third layer, no activation
         
         # combination
         net = layers.Add()([net_states, net_actions])                                # combine state and actions
         net = layers.Activation('relu')(net)                                         # fourth activation
-        net = layers.Dense(units=16, activation='relu')(actions)                     # fifth activation
+        # net = layers.Dense(units=16, activation='relu')(actions)                     # fifth activation
 
         Q_values = layers.Dense(units=1, name='q_values')(net)                       # generate a Q_value
 
         self.model = models.Model(inputs=[states, actions], outputs=Q_values)        # create the model
 
-        optimizer = optimizers.Adam(lr=0.0001)                              # set the optimizer
+        optimizer = optimizers.Adam(lr=0.0005)                              # set the optimizer
         self.model.compile(optimizer=optimizer, loss='mse')                 # compile the model
 
         action_gradients = K.gradients(Q_values, actions)                   # calculate the gradients with respect to actions
@@ -124,6 +124,7 @@ class Pair(object):
         self.reward = reward
         self.next_state = next_state
         self.done = done
+
     def __lt__(self, other):
         return self.reward < other.reward
 '''
@@ -155,7 +156,7 @@ class ReplayBuffer:
         return len(self.memory)
 
       
-class Task2_Policy(BaseAgent):
+class DDPG_Policy(BaseAgent):
     def __init__(self, task):
         self.task = task
         self.state_size = 2
@@ -179,16 +180,16 @@ class Task2_Policy(BaseAgent):
         ################
         self.load_weights = True
         self.save_weights_every = 10  # save weights every n episodes, None to disable
-        self.model_dir = util.get_param('agent')  # you can use a separate subdirectory for each task and/or neural net architecture
-        self.model_name = "task2-HOVER"
+        self.model_dir = util.get_param('out')  # you can use a separate subdirectory for each task and/or neural net architecture
+        self.model_name = "MODEL_WEIGHTS"
         self.model_ext = ".h5"
         if self.load_weights or self.save_weights_every:
             # Define Actor weights h5 file
-            self.actor_filename = os.path.join(self.model_dir,
-                "Task_02/{}_actor{}".format(self.model_name, self.model_ext))
+            self.actor_filename = os.path.join(self.model_dir, util.get_param('task'),
+                "{}_actor{}".format(self.model_name, self.model_ext))
             # Define Critic weights h5 file
-            self.critic_filename = os.path.join(self.model_dir,
-                "Task_02/{}_critic{}".format(self.model_name, self.model_ext))
+            self.critic_filename = os.path.join(self.model_dir, util.get_param('task'),
+                "{}_critic{}".format(self.model_name, self.model_ext))
             # Debug print statements
             print("Actor filename :", self.actor_filename)  # [debug]
             print("Critic filename:", self.critic_filename)  # [debug]
@@ -226,7 +227,7 @@ class Task2_Policy(BaseAgent):
         ####################
         # BUFFER VARIABLES #
         ####################
-        self.buffer_size = 100000
+        self.buffer_size = 50000
         self.batch_size = 64
         self.memory = ReplayBuffer(self.buffer_size)
         
@@ -246,8 +247,7 @@ class Task2_Policy(BaseAgent):
         ###############################
         self.total_reward = 0
         self.stats_filename = os.path.join(
-            util.get_param('agent'),
-            "Task_02/stats_{}.csv".format(util.get_timestamp()))
+            util.get_param('out'), util.get_param('task'), "stats_{}.csv".format(util.get_timestamp()))
         self.stats_columns = ['episode', 'total_reward']
         self.episode_num = 1
         print("Saving stats {} to {}".format(self.stats_columns, self.stats_filename))
@@ -287,6 +287,11 @@ class Task2_Policy(BaseAgent):
     def postprocess_action(self, action):
         complete_action = np.zeros(self.task.action_space.shape)
         complete_action[2] = action
+        '''
+        if self.step_count % 100 == 0:
+            print ("Action to be processed:\n{0}".format(action))
+            print ("Processed action:\n{0}".format(complete_action))
+        '''
         return complete_action
 
     ###########################
@@ -301,12 +306,13 @@ class Task2_Policy(BaseAgent):
         # normalize position between [0, 1]
         state[0] = (state[0]-self.state_low[0])/(self.state_high[0]-self.state_low[0])
         
-        # state = state.reshape(1, -1)                  # convert to row vector
+        state = state.reshape(1, -1)                  # convert to row vector
         action = self.act(state)                      # call act method with current state
 
         # Add <LS, LA, R, S, D> to replay buffer
         if self.last_state is not None and self.last_action is not None:
             self.memory.add(state=self.last_state, action=self.last_action, reward=reward, next_state=state, done=done)
+        
         # Start Batch learning when possible    
         if len(self.memory) > self.batch_size:
             experiences = self.memory.sample(self.batch_size)
@@ -332,7 +338,7 @@ class Task2_Policy(BaseAgent):
             print ("Average Reward:\t{0}".format(self.total_reward/self.step_count))
             self.episode += 1
             self.reset()
-            
+
         return self.postprocess_action(action)    # return the action
 
     ######################
@@ -391,7 +397,7 @@ class Task2_Policy(BaseAgent):
 ######################
         
 class OUNoise:
-    def __init__(self, size, mu=None, theta=0.15, sigma=0.1):
+    def __init__(self, size, mu=None, theta=0.15, sigma=0.75):
         self.size = size
         self.mu = mu if mu is not None else np.zeros(self.size)
         self.theta = theta
@@ -407,3 +413,4 @@ class OUNoise:
         dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
         self.state = x + dx
         return self.state        
+

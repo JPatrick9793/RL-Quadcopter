@@ -63,25 +63,28 @@ class Landing(BaseTask):
         # CALCULATE INDIVIDUAL ERRORS #
         ###############################
         
-        x = np.linalg.norm(np.array([0.0, 0.0, 0.0]) - state[0:3])     # distance between copter and origin
-        o = np.linalg.norm(self.target_pose-state[3:7])                # NOT NEEDED BECAUSE SPACE CONSTRAINED
-        v = np.linalg.norm(np.array([0.0, 0.0, 0.0]) - state[7:10])    # velocity magnitude
+        x = np.linalg.norm(np.array([0.0, 0.0, 2.0])      - state[0:3])     # distance between copter and origin
+        o = np.linalg.norm(np.array([0.0, 0.0, 0.0, 0.0]) - state[3:7])     # NOT NEEDED BECAUSE SPACE CONSTRAINED
+        v = np.linalg.norm(np.array([0.0, 0.0, 0.0])      - state[7:10])    # velocity magnitude
         
-        # v_error = (x**2 + 5*v**2)
-        x_error = abs(x)                           # error is abs distance from 0.0
-        v_error = abs(v)/(abs(x) + 0.1)            # prevent divide by 0
+        v_error = (x**2 + (v*5)**2)
+        x_error = abs(x**2)                                      # error is abs distance from 0.0
+        # v_error = abs(v)/(abs(x) + 0.1)                        # prevent divide by 0
         
-        reward = 200 - x_error - v_error           # x and v errors
+        reward = -(0.25)*x_error - (0.75)*v_error           # x and v errors
         
         if state[2] <= 0.2:                        # if the quadcopter hits the ground
             done = True                            # end episode
-            reward += 50                           # give reward
-                
+            reward -= 50                           # give penalty
+            '''                           
+            if timestamp < self.min_duration:
+                reward -= 50
+            '''  
         if timestamp > self.max_duration:          # if time limit is exceeded
             done = True                            # end current episode
             reward -= 50                           # give penalty
 
-        reward = (1/200)*reward                    # scale down so no exploding gradients
+        reward = (1/1000)*reward                    # scale down so no exploding gradients
         
         action = self.agent.step(state, reward, done)
 
