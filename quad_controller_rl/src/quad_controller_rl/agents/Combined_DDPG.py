@@ -155,31 +155,30 @@ class ReplayBuffer:
         return len(self.memory)
 
       
-class DDPG_Policy(BaseAgent):
+class Combined_DDPG_Policy(BaseAgent):
     def __init__(self, task):
-        self.task = task
-        self.state_size = 2
+        self.task = task                            # task passed to agent
+        self.which_task = self.task.which_task      # indicates which state the agent is in
+        self.state_size = 3                         # now includes which state (takeoff=0 or landing=1)
 
-        self.state_low = self.task.observation_space.low[0:3]
-        self.state_high = self.task.observation_space.high[0:3]
+        self.state_low = self.task.observation_space.low[0:3]      # min position x,y,z
+        self.state_high = self.task.observation_space.high[0:3]    # max position x,y,z
 
-        self.state_range = self.state_high - self.state_low
-        self.action_size = 1
-        # self.action_low = task.action_space.low[0:3]
-        self.action_low = task.action_space.low[2]
-        # self.action_high = task.action_space.high[0:3]
-        self.action_high = task.action_space.high[2]
-        self.action_range = self.action_high - self.action_low
+        self.state_range = self.state_high - self.state_low                      # position ranges
+        self.action_size = 1                                                     # constrained only to z direction
+        self.action_low = task.action_space.low[2]                               # lowest z-force (-25.0)
+        self.action_high = task.action_space.high[2]                             # highest z-force (25.0)
+        self.action_range = self.action_high - self.action_low                   # range (50.0)
         print("Original spaces: {}, {}\nConstrained spaces: {}, {}".format(
             self.task.observation_space.shape, self.task.action_space.shape,
-            self.state_size, self.action_size))
+            self.state_size, self.action_size))                                  # Debug
         
         ################
         # SAVE WEIGHTS #
         ################
         self.load_weights = True
-        self.save_weights_every = 10  # save weights every n episodes, None to disable
-        self.model_dir = util.get_param('out')  # you can use a separate subdirectory for each task and/or neural net architecture
+        self.save_weights_every = 10
+        self.model_dir = util.get_param('out')
         self.model_name = "MODEL_WEIGHTS"
         self.model_ext = ".h5"
         if self.load_weights or self.save_weights_every:
@@ -231,8 +230,8 @@ class DDPG_Policy(BaseAgent):
         self.memory = ReplayBuffer(self.buffer_size)
         
         self.noise = OUNoise(self.action_size)
-        self.gamma = 0.99
-        self.tau = 0.001
+        self.gamma = 0.99                                         # Gamma stays at 0.99
+        self.tau = 0.01                                           # changed TAU to 0.01
         
         self.last_state = None
         self.last_action = None
@@ -261,6 +260,16 @@ class DDPG_Policy(BaseAgent):
         self.total_reward = 0
         self.step_count = 0
         
+    ####################################################
+    #   METHODS USED BY TASK TO CHANGE BETWEEN TASKS   #
+    ####################################################
+    
+    def get_epCount(self):
+        return self.episode
+      
+    def reset_epCount(self):
+        self.episode = 0
+        
     ###########################
     #   WRITE STATS TO CSV    #
     ###########################
@@ -277,7 +286,7 @@ class DDPG_Policy(BaseAgent):
     ###########################
         
     def preprocess_state(self, state):
-        return np.array([state[2], state[9]])  # position only
+        return np.array([state[2], state[9], self.which_task])  # position, velocity, and which_state
       
     ###########################
     #   POSTPROCESS STATE     #
@@ -384,7 +393,6 @@ class DDPG_Policy(BaseAgent):
     ######################
 
     def soft_update(self, local_model, target_model):
-        """Soft update model parameters."""
         local_weights = np.array(local_model.get_weights())
         target_weights = np.array(target_model.get_weights())
 
