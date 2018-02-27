@@ -4,3 +4,4 @@ from quad_controller_rl.agents.Task1_policy import Task1_Policy
 from quad_controller_rl.agents.Task2_policy import Task2_Policy
 from quad_controller_rl.agents.Task3_policy import Task3_Policy
 from quad_controller_rl.agents.DDPG_policy import DDPG_Policy
+from quad_controller_rl.agents.Combined_DDPG import Combined_DDPG_Policy
