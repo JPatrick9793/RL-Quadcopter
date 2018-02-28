@@ -158,7 +158,6 @@ class ReplayBuffer:
 class Combined_DDPG_Policy(BaseAgent):
     def __init__(self, task):
         self.task = task                            # task passed to agent
-        self.which_task = self.task.which_task      # indicates which state the agent is in
         self.state_size = 3                         # now includes which state (takeoff=0 or landing=1)
 
         self.state_low = self.task.observation_space.low[0:3]      # min position x,y,z
@@ -177,7 +176,7 @@ class Combined_DDPG_Policy(BaseAgent):
         # SAVE WEIGHTS #
         ################
         self.load_weights = True
-        self.save_weights_every = 10
+        self.save_weights_every = 4
         self.model_dir = util.get_param('out')
         self.model_name = "MODEL_WEIGHTS"
         self.model_ext = ".h5"
@@ -230,23 +229,26 @@ class Combined_DDPG_Policy(BaseAgent):
         self.memory = ReplayBuffer(self.buffer_size)
         
         self.noise = OUNoise(self.action_size)
-        self.gamma = 0.99                                         # Gamma stays at 0.99
-        self.tau = 0.01                                           # changed TAU to 0.01
+        self.gamma = 0.99                       # Gamma stays at 0.99
+        self.tau = 0.01                         # changed TAU to 0.01
         
         self.last_state = None
         self.last_action = None
         self.reward_vector = []
         self.episode_count = 0
         self.step_count = 0
-        self.episode = 0
-        
+
+
+        self.episode = 0                        # Episode number for given state
+        self.episode_total = 0                  # Total number of episodes
+
         ###############################
-        # SAVE EP REWARDS TO CSV FILE #
+        # SAVE EP REWARDS TO CSV FILE #         # **WARNING!! STATS_COLUMNS HAS CHANGED**
         ###############################
         self.total_reward = 0
         self.stats_filename = os.path.join(
             util.get_param('out'), util.get_param('task'), "stats_{}.csv".format(util.get_timestamp()))
-        self.stats_columns = ['episode', 'total_reward']
+        self.stats_columns = ['task', 'episode', 'total_reward']
         self.episode_num = 1
         print("Saving stats {} to {}".format(self.stats_columns, self.stats_filename))
         
@@ -268,6 +270,7 @@ class Combined_DDPG_Policy(BaseAgent):
         return self.episode
       
     def reset_epCount(self):
+        print ("Episodes have RESET")
         self.episode = 0
         
     ###########################
@@ -285,8 +288,8 @@ class Combined_DDPG_Policy(BaseAgent):
     #   PREPROCESS STATE      #
     ###########################
         
-    def preprocess_state(self, state):
-        return np.array([state[2], state[9], self.which_task])  # position, velocity, and which_state
+    def preprocess_state(self, state, task):
+        return np.array([state[2], state[9], task])  # position, velocity, and which_state
       
     ###########################
     #   POSTPROCESS STATE     #
@@ -307,10 +310,11 @@ class Combined_DDPG_Policy(BaseAgent):
     ###########################
     
     def step(self, state, reward, done):
-        self.total_reward += reward                   # add reward to total
-        self.step_count += 1                          # increase step count
-        state = self.preprocess_state(state)          # convert state to only necessary components
-        
+        which_task = self.task.get_which_task()            # Determine if taking off or landing
+        self.total_reward += reward                        # add reward to total
+        self.step_count += 1                               # increase step count
+        state = self.preprocess_state(state, which_task)   # convert state to only necessary components
+
         # normalize position between [0, 1]
         state[0] = (state[0]-self.state_low[0])/(self.state_high[0]-self.state_low[0])
         
@@ -339,11 +343,16 @@ class Combined_DDPG_Policy(BaseAgent):
                 self.actor_local.model.save_weights(self.actor_filename)
                 self.critic_local.model.save_weights(self.critic_filename)
                 print("Model weights saved at episode", self.episode_num)  # [debug]
-                
+            # calc average reward per action for given episode
             avg_reward = self.total_reward / self.step_count
-            self.write_stats([self.episode_num, self.total_reward])
-            print ("Total Reward:\t{0}".format(self.total_reward))
+            # WRITE STATS TO FILE
+            self.write_stats([which_task, self.episode_total, self.total_reward])
+            # print statements for debugging
+            print ("which_task?   :\t{0}".format(which_task))
+            print ("self.episode  :\t{0}".format(self.episode))
+            print ("Total Reward  :\t{0}".format(self.total_reward))
             print ("Average Reward:\t{0}".format(self.total_reward/self.step_count))
+            self.episode_total += 1
             self.episode += 1
             self.reset()
 

@@ -33,6 +33,9 @@ class Combined(BaseTask):
         self.which_task = 0                # number to indicate which task the agent 
         self.switch_task_after_eps = 5     # after 5 epsidos, switch tasks
 
+    def get_which_task(self):
+        return self.which_task
+
     def reset(self):
         self.last_timestamp = None
         self.last_position = None
