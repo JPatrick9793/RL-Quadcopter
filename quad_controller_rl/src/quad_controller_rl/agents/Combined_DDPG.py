@@ -271,6 +271,7 @@ class Combined_DDPG_Policy(BaseAgent):
       
     def reset_epCount(self):
         print ("Episodes have RESET")
+        self.memory.reset()
         self.episode = 0
         
     ###########################
