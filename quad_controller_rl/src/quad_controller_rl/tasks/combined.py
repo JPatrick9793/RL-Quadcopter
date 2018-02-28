@@ -39,13 +39,17 @@ class Combined(BaseTask):
     def reset(self):
         self.last_timestamp = None
         self.last_position = None
-        return Pose(
-                position=Point(0.0, 0.0, np.random.normal(2.0, 0.25)),  # drop off from a slight random height
-                orientation=Quaternion(0.0, 0.0, 0.0, 0.0),
-            ), Twist(
-                linear=Vector3(0.0, 0.0, 0.0),
-                angular=Vector3(0.0, 0.0, 0.0)
-            )
+        # if takeoff task, start from ground
+        if self.which_task == 0:
+            return Pose(position=Point(0.0, 0.0, np.random.normal(2.0, 0.25)),
+                    orientation=Quaternion(0.0, 0.0, 0.0, 0.0),
+                ), Twist(linear=Vector3(0.0, 0.0, 0.0), angular=Vector3(0.0, 0.0, 0.0))
+        # if landing task, start from in air
+        else:
+            return Pose(
+                    position=Point(0.0, 0.0, np.random.normal(10.0, 0.25)),
+                    orientation=Quaternion(0.0, 0.0, 0.0, 0.0),
+                ), Twist(linear=Vector3(0.0, 0.0, 0.0), angular=Vector3(0.0, 0.0, 0.0))
 
     def update(self, timestamp, pose, angular_velocity, linear_acceleration):
         # Prepare state vector (pose only; ignore angular_linear_acceleration)
@@ -70,35 +74,56 @@ class Combined(BaseTask):
         # CALCULATE INDIVIDUAL ERRORS #
         ###############################
         
-        x = np.linalg.norm(np.array([0.0, 0.0, 10.0])      - state[0:3])     # distance between copter and origin
-        o = np.linalg.norm(np.array([0.0, 0.0,  0.0, 0.0]) - state[3:7])     # NOT NEEDED BECAUSE SPACE CONSTRAINED
-        v = np.linalg.norm(np.array([0.0, 0.0,  0.0])      - state[7:10])    # velocity magnitude
-        
-        v_error = ((x*3)**2 + v**2)
-        x_error = abs(x**2)                                      # error is abs distance from 0.0
-        # v_error = abs(v)/(abs(x) + 0.1)                        # prevent divide by 0
-        
-        reward = -v_error                          # x and v errors
-        
-        if state[2] == 10.0:                        # if the quadcopter hits target
-            reward += 50                            # give give reward
+        # if task = takeoff
+        if self.which_task == 0:         
+            x = np.linalg.norm(np.array([0.0, 0.0, 10.0])      - state[0:3])     # distance between copter and origin
+            o = np.linalg.norm(np.array([0.0, 0.0,  0.0, 0.0]) - state[3:7])     # NOT NEEDED BECAUSE SPACE CONSTRAINED
+            v = np.linalg.norm(np.array([0.0, 0.0,  0.0])      - state[7:10])    # velocity magnitude
             
-        if timestamp > self.max_duration:          # if time limit is exceeded
-            done = True                            # end current episode
-  
-        if x > self.max_distance:                  # if max distance is exceeded
-            done = True                            # end current episode
-            reward -= 100                          # give penalty
-
-        reward = (1/100)*reward                    # scale down so no exploding gradients
+            v_error = ((x*3)**2 + v**2)
+            x_error = abs(x**2)                        # error is abs distance from 0.0
+            # v_error = abs(v)/(abs(x) + 0.1)          # prevent divide by 0
+            
+            reward = -v_error                          # x and v errors
+            reward = (1/1000)*reward                   # scale down so no exploding gradients
+            
+            if state[2] == 10.0:                       # if the quadcopter hits target
+                reward += 50                           # give give reward
+            if x > self.max_distance:                  # if max distance is exceeded
+                done = True                            # end current episode
+                reward -= 100                          # give penalty
+            
+        # if task = landing
+        if self.which_task == 1:         
+            x = np.linalg.norm(np.array([0.0, 0.0,  2.0])      - state[0:3])     # distance between copter and origin
+            o = np.linalg.norm(np.array([0.0, 0.0,  0.0, 0.0]) - state[3:7])     # NOT NEEDED BECAUSE SPACE CONSTRAINED
+            v = np.linalg.norm(np.array([0.0, 0.0,  0.0])      - state[7:10])    # velocity magnitude
+            
+            v_error = (x**2 + (3*v)**2)
+            x_error = abs(x**2)                        # error is abs distance from 0.0
+            # v_error = abs(v)/(abs(x) + 0.1)          # prevent divide by 0
+            
+            reward = -(0.25)*x_error - (0.75)*v_error  # x and v errors
+            reward = (1/1000)*reward                   # scale down so no exploding gradients
+            
+            if state[2] == 2.0:                        # if the quadcopter hits target
+                reward += 50                           # give give reward
+            if x > self.max_distance:                  # if max distance is exceeded
+                done = True                            # end current episode
+                reward -= 50                           # give penalty
         
+        # CHECK IF TIME LIMIT EXCEEDED
+        if timestamp > self.max_duration:     # if time limit is exceeded
+            done = True                       # end current episode
+        
+        # RESET EPISODE COUNT WHEN SWITCHING TASKS
         if self.agent.get_epCount() == self.switch_task_after_eps:
             self.which_task = 1 if self.which_task == 0 else 0
             self.agent.reset_epCount()
         
+        # GET ACTION
         action = self.agent.step(state, reward, done)
 
-        
         ###################################################################
         # Convert to proper force command (a Wrench object) and return it #
         ###################################################################
